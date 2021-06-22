@@ -5,7 +5,17 @@ title: Damon Cortesi
 theme: "PaperMod"
 
 params:
+  description: AWS Analytics Developer Advocate
+
   ShowShareButtons: true
+  ShowPostNavLinks: true
+  ShowBreadCrumbs: true
+  ShowCodeCopyButtons: true
+  ShowReadingTime: true
+
+  assets:
+    favicon: /images/favicon.ico
+
 
   profileMode:
     enabled: true
@@ -13,7 +23,9 @@ params:
     subtitle: >
       My name is Damon and I'm a developer advocate for analytics at AWS.
 
-      - I work primarily with EMR but also have fun on the side with Athena and anything data-related.
+      
+      
+      💁 I work primarily with EMR but also have fun on the side with Athena and anything data-related.
     imageUrl: "/images/dacort.jpeg" # optional
     imageTitle: "@dacort" # optional
     buttons:
@@ -38,6 +50,9 @@ params:
       url: "https://youtube.com/channel/UCKtlXVZC2DqzayRlZYLObZw"
     - name: github
       url: "https://github.com/dacort"
+
+  cover:
+    hiddenInList: true # hide on list pages and home
 
 menu:
   main:
