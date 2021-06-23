@@ -8,6 +8,8 @@ cover:
     alt: "https://pimpyourowndevice.com/stickers/developer-avocado-cheerful/" # alt text
 ---
 
+> _image credit this awesome [cheerful dev advocado sticker](https://pimpyourowndevice.com/stickers/developer-avocado-cheerful/)_
+
 I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I've learned a lot of things about DevRel...and a lot about what I didn't know. So here's a top 5 list.
 
 ### 1. There are multiple roles in DevRel
