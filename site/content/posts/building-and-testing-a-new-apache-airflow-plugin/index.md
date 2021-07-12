@@ -160,8 +160,8 @@ Next, we'll try to run our example DAG using `airflow dags test`!
 Our script requires the EMR on EKS virtual cluster ID and job role ARN, so we'll supply those as environment variables.
 
 ```shell
-VIRTUAL_CLUSTER_ID=wfto7bwu9n8ajdohqkri06pc1 \
-JOB_ROLE_ARN=arn:aws:iam::037238293423:role/emr_eks_default_role \
+VIRTUAL_CLUSTER_ID=abcdefghijklmno0123456789 \
+JOB_ROLE_ARN=arn:aws:iam::111122223333:role/emr_eks_default_role \
 airflow dags test emr_eks_pi_job $(date -Is)
 ```
 
