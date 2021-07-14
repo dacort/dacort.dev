@@ -224,6 +224,12 @@ I couldn't figure out how to run them locally (and didn't learn about [`pre-comm
 - fix locally
 - GOTO start
 
+I learned that you can use `breeze static-checks` to run a subset of the static checks locally. This is pretty helpful too if you want to avoid too many `git push`es.
+
+```shell
+./breeze static-check all -- --files airflow/providers/amazon/aws/*/emr_containers.py 
+```
+
 That said, I'm _very_ happy there are so many checks in this project. There are a lot of things I didn't know about until the checks ran (like the `spelling_wordlist.txt` file) and it's great to have such a high level of automation to help contributors maintain the quality of their code.
 
 ## Wrapup
