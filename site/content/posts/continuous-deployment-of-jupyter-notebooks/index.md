@@ -1,7 +1,7 @@
 ---
 title: "Continuous Deployment of Jupyter Notebooks"
 date: 2021-07-14T16:00:00-07:00
-draft: true
+draft: false
 
 tags: ["aws", "jupyter", "python", "devops", "opensource"]
 showToc: false
