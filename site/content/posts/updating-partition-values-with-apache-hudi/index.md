@@ -22,7 +22,7 @@ More specifically, if you're doing Analytics with S3, Hudi provides a way for yo
 
 I'm learning more about Hudi and was following this [EMR guide to working with a Hudi dataset](https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-work-with-dataset.html), but the "Upsert" operation didn't quite work as I expected. Instead of overwriting the desired record, it added a second one with the same ID. 🤔
 
-After some furious searching, I finally came across this post about [employing the right indexes in Apache Hudi](https://medium.com/apache-hudi-blogs/employing-the-right-indexes-for-fast-updates-deletes-in-apache-hudi-814d863635f6). Specifically, this line caught my attention:
+After some furious searching, I finally came across this post about [employing the right indexes in Apache Hudi](https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/). Specifically, this line caught my attention:
 
 > **Global indexes enforce uniqueness of keys across all partitions of a table i.e guarantees that exactly one record exists in the table for a given record key.**
 
