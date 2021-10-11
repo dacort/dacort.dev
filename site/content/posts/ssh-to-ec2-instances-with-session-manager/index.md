@@ -155,7 +155,7 @@ aws s3 cp s3://<BUCKET_NAME>/logs/session_manager/your-aws-username-abcdefgh1234
 
 ![SSM Log Output](log-output.png)
 
-And yes, the *FULL CONTENTS*. So if you enter a password or sensitive info, you should follow the steps [here]https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-logging.html).
+And yes, the *FULL CONTENTS*. So if you enter a password or sensitive info, you should follow the steps [here](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-logging.html).
 
 ```shell
 stty -echo; read passwd; stty echo;
