@@ -12,6 +12,7 @@ params:
   ShowBreadCrumbs: true
   ShowCodeCopyButtons: true
   ShowReadingTime: true
+  ShowFullTextinRSS: true
 
   assets:
     favicon: /images/favicon.ico
