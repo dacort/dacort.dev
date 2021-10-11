@@ -1,5 +1,32 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>AWS on Damon Cortesi</title><link>https://dacort.dev/projects/aws/</link><description>Recent content in AWS on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Tue, 01 Jun 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://dacort.dev/projects/aws/index.xml" rel="self" type="application/rss+xml"/><item><title>Athena Glue Service Logs</title><link>https://dacort.dev/projects/aws/athena-glue-service-logs/</link><pubDate>Fri, 14 May 2021 15:23:33 -0700</pubDate><guid>https://dacort.dev/projects/aws/athena-glue-service-logs/</guid><description>Glue jobs and library to manage conversion of AWS Service Logs into Athena-friendly formats.</description></item><item><title>Athena SQLite 💾</title><link>https://dacort.dev/projects/aws/athena-sqlite/</link><pubDate>Fri, 14 May 2021 15:23:33 -0700</pubDate><guid>https://dacort.dev/projects/aws/athena-sqlite/</guid><description>Athena SQLite is a project that allows you to query SQLite databases in S3 using Athena&amp;rsquo;s Federated Query functionality.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>AWS on Damon Cortesi</title><link>https://dacort.dev/projects/aws/</link><description>Recent content in AWS on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Tue, 01 Jun 2021 00:00:00 +0000</lastBuildDate><atom:link href="https://dacort.dev/projects/aws/index.xml" rel="self" type="application/rss+xml"/><item><title>Athena Glue Service Logs</title><link>https://dacort.dev/projects/aws/athena-glue-service-logs/</link><pubDate>Fri, 14 May 2021 15:23:33 -0700</pubDate><guid>https://dacort.dev/projects/aws/athena-glue-service-logs/</guid><description>Glue jobs and library to manage conversion of AWS Service Logs into Athena-friendly formats.</description><content:encoded><![CDATA[<p>AWS Service Logs come in all different formats. Ideally they could all be queried in place by Athena and, while some can, for cost and performance reasons it can be better to convert the logs into partitioned Parquet files.</p>
+<p>The general approach is that for any given type of service log, we have Glue Jobs that can do the following:</p>
+<ol>
+<li>Create source tables in the Data Catalog</li>
+<li>Create destination tables in the Data Catalog</li>
+<li>Know how to convert the source data to partitioned, Parquet files</li>
+<li>Maintain new partitions for both tables</li>
+</ol>
+<p>This library was created as part of my role as a Big Data Architect and is available at <a href="https://github.com/awslabs/athena-glue-service-logs">awslabs/athena-glue-service-logs</a>.</p>
+]]></content:encoded></item><item><title>Athena SQLite 💾</title><link>https://dacort.dev/projects/aws/athena-sqlite/</link><pubDate>Fri, 14 May 2021 15:23:33 -0700</pubDate><guid>https://dacort.dev/projects/aws/athena-sqlite/</guid><description>Athena SQLite is a project that allows you to query SQLite databases in S3 using Athena&amp;rsquo;s Federated Query functionality.
 Install it from the Serverless Application Repository: AthenaSQLiteConnector.
 Wait, what?! SQLite in S3? Yea! As quite possibly the most prevelant database in the world, it&amp;rsquo;s not unsual for me to have various SQLite files laying around.
 This Athena data connector allows you to query those databases directly from Athena.
-Cool! Right?! One of the fun things about this project is that SQLite is not intended to be a network database.</description></item><item><title>Demo Code</title><link>https://dacort.dev/projects/aws/demo-code/</link><pubDate>Fri, 14 May 2021 15:23:33 -0700</pubDate><guid>https://dacort.dev/projects/aws/demo-code/</guid><description>Demo code I use during presentations.</description></item></channel></rss>
+Cool! Right?! One of the fun things about this project is that SQLite is not intended to be a network database.</description><content:encoded><![CDATA[<p>Athena SQLite is a project that allows you to query SQLite databases in S3 using Athena&rsquo;s Federated Query functionality.</p>
+<p>Install it from the Serverless Application Repository: <a href="https://serverlessrepo.aws.amazon.com/#/applications/arn:aws:serverlessrepo:us-east-1:689449560910:applications~AthenaSQLITEConnector">AthenaSQLiteConnector</a>.</p>
+<h2 id="wait-what">Wait, what?!</h2>
+<p>SQLite in S3? Yea! As quite possibly the most prevelant database in the world, it&rsquo;s not unsual for me to have various SQLite files laying around.</p>
+<p>This Athena data connector allows you to query those databases directly from Athena.</p>
+<h2 id="cool">Cool!</h2>
+<p>Right?! One of the fun things about this project is that SQLite is <em>not</em> intended to be a network database.</p>
+<p>So I implemented a custom <a href="https://rogerbinns.github.io/apsw/vfs.html">Virtual File System</a> for S3 that could be used by the Python SQLite wrapper, <a href="https://rogerbinns.github.io/apsw/">APSW</a>.</p>
+<h2 id="source-code">Source Code</h2>
+<p><a href="https://github.com/dacort/athena-sqlite/">dacort/athena-sqlite</a></p>
+]]></content:encoded></item><item><title>Demo Code</title><link>https://dacort.dev/projects/aws/demo-code/</link><pubDate>Fri, 14 May 2021 15:23:33 -0700</pubDate><guid>https://dacort.dev/projects/aws/demo-code/</guid><description>Demo code I use during presentations.</description><content:encoded><![CDATA[<p>I&rsquo;m a fan of making the code I run in presentations publicly available.</p>
+<p>Most of the demo code I use is available in my <a href="https://github.com/dacort/demo-code">demo-code</a> repository on GitHub. In there, you&rsquo;ll find such interesting things as:</p>
+<ul>
+<li>EMR CloudFormation Templates</li>
+<li><a href="https://github.com/dacort/demo-code/tree/main/emr/eks">EMR on EKS notes</a></li>
+<li><a href="https://github.com/dacort/demo-code/tree/main/emr/studio">EMR Studio notes</a></li>
+<li>And even a <a href="https://github.com/dacort/demo-code/tree/main/cdk/big-data-stack">big data CDK stack</a> for easy deployment of my demos</li>
+</ul>
+]]></content:encoded></item></channel></rss>

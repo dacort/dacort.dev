@@ -1,4 +1,748 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>emr on Damon Cortesi</title><link>https://dacort.dev/tags/emr/</link><description>Recent content in emr on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.dev/tags/emr/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.dev/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.dev/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.
-Overview Before you get started, it&amp;rsquo;s good to have an understanding of the different components of an Airflow task.</description></item><item><title>Build your own Air Quality Monitor with OpenAQ and EMR on EKS</title><link>https://dacort.dev/posts/emr-eks-custom-images-with-openaq/</link><pubDate>Thu, 24 Jun 2021 21:20:00 +0000</pubDate><guid>https://dacort.dev/posts/emr-eks-custom-images-with-openaq/</guid><description>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.
+Overview Before you get started, it&amp;rsquo;s good to have an understanding of the different components of an Airflow task.</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
+<p><img loading="lazy" src="cloc.png" alt=""  />
+</p>
+<h2 id="overview">Overview</h2>
+<p>Before you get started, it&rsquo;s good to have an understanding of the different components of an Airflow task. The <a href="https://airflow.apache.org/docs/apache-airflow/stable/concepts/tasks.html">Airflow Tasks documentation</a> covers two of the important aspects:</p>
+<ul>
+<li>Operators, predefined task templates to build DAGs</li>
+<li>Sensors, a subclass of Operators that wait on external services</li>
+</ul>
+<p><a href="https://airflow.apache.org/docs/apache-airflow/stable/concepts/connections.html#hooks">Hooks</a> are also important in that they are the main interface to external services and often the building blocks that Operators are built out of.</p>
+<p>All that said, in Airflow 1.0, <a href="https://airflow.apache.org/docs/apache-airflow/stable/plugins.html">Plugins</a> were the primary way to integrate external features. That&rsquo;s changed in 2.0, and now there are sets of <a href="https://airflow.apache.org/docs/apache-airflow/stable/extra-packages-ref.html#providers-extras">Provider Packages</a> that provide pip-installable packages for integrating with different providers. This includes cloud providers like AWS and GCP, as well as different APIs like Discord, Salesforce, and Slack. The <a href="https://airflow.apache.org/docs/apache-airflow/stable/howto/custom-operator.html">custom operators</a> documentation is helpful, but it only discusses creating the operator - not how to test it, add documentation, update a provider package.</p>
+<p>So&hellip;😅 once you have an understanding of how to add a new provider package and how it integrates, let&rsquo;s go over the steps we need to take to add a new plugin.</p>
+<ol>
+<li>Add the Plugin Operator/Hook/Sensor/etc</li>
+<li>Add tests(!!) for your new code</li>
+<li>Create an example DAG</li>
+<li>Add documentation in on how to use the Operator</li>
+<li>Update the various sections of the provider.yaml</li>
+<li>linting, checks, and linting again</li>
+</ol>
+<p><em>The official Airflow docs on <a href="http://airflow.apache.org/docs/apache-airflow-providers/howto/create-update-providers.html">Community Providers</a> are also very helpful.</em></p>
+<h2 id="creating-your-new-operator">Creating your new operator</h2>
+<p>All provider packages live in the <a href="https://github.com/apache/airflow/tree/main/airflow/providers"><code>airflow/providers</code></a> subtree of the git repository.</p>
+<p><img loading="lazy" src="provider_listing.png" alt="List of providers"  />
+</p>
+<p>If you look in each provider directory, you&rsquo;ll see various directories including <code>hooks</code>, <code>operators</code>, and <code>sensors</code>. These provide some good examples of how to create your Operator.</p>
+<p>For now, I&rsquo;m going to create a new <code>emr_containers.py</code> file in each of the <code>hooks</code>, <code>operators</code>, and <code>sensors</code> directories. We&rsquo;ll be creating a new Hook for connecting to the <a href="https://docs.aws.amazon.com/emr-on-eks/latest/APIReference/Welcome.html">EMR on EKS API</a>, a new Sensor for waiting on jobs to complete, and an Operator that can be used to trigger your EMR on EKS jobs.</p>
+<p>I won&rsquo;t go over the implementation details here, but you can take a look at each file in the Airflow repository.</p>
+<p>One thing that was confusing to me during this process is that all three of those files have the same name&hellip;so at a glance, it was tough for me to know which component I was editing. But if you can keep this diagram in your head, it&rsquo;s pretty helpful.</p>
+<p><img loading="lazy" src="emr_containers_workflow.png" alt=""  />
+</p>
+<p>Note that there is no <code>EMRContainerSensor</code> in this workflow - that&rsquo;s because the default operator handles polling/waiting for the job to complete itself.</p>
+<h2 id="testing">Testing</h2>
+<p>Similar to the provider packages, tests for the provider packages live in the <a href="https://github.com/apache/airflow/tree/main/tests/providers"><code>tests/providers</code></a> subtree.</p>
+<p>With the AWS packages, many plugins use the <a href="https://github.com/spulec/moto">moto</a> library for testing, an AWS service mocking library. EMR on EKS is a fairly recent addition, so it&rsquo;s unfortunately not part of the mocking library. Instead, I used the standard <code>mock</code> library to return sample values from the API.</p>
+<p>The tests are fairly standard unit tests, but what gets challenging is figuring how to actually <em>RUN</em> these tests. Airflow is a monorepo - there are many benefits and challenges to this approach, but what it means for us is we have to figure out how to run the whole smorgosboard of this project.</p>
+<p>Luckily(!) Airflow has a cool CI environment known as <a href="https://github.com/apache/airflow/blob/main/BREEZE.rst">Breeze</a> that can pretty much do whatever you need to make sure your new plugin is working well!</p>
+<h3 id="up-and-running-with-breeze">Up and running with Breeze</h3>
+<p>The main challenge I had with Breeze was resource consumption. 🙁</p>
+<p><a href="https://github.com/apache/airflow/blob/main/BREEZE.rst#resources-required">Breeze requires</a> a minimum of 4GB RAM for Docker and 40GB of free disk space. I had to tweak both of those settings on my mac, but even so I think Breeze is named for the winds that are kicked up by laptop fans everywhere when it starts. 😆</p>
+<p>In any case, you <em>should</em> be able to just type <code>./breeze</code> and be dropped into an Airflow shell after it builds a local version of the necessary Docker images.</p>
+<h3 id="unit-tests">Unit tests</h3>
+<p>Once in the Airflow shell, you should be able to run any of your unit tests.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">python -m pytest tests/providers/amazon/aws/operators/test_emr_containers.py
+</code></pre></div><p>If you want, you can also run your tests with the <code>./breeze</code> CLI.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./breeze tests tests/providers/amazon/aws/sensors/test_emr_containers.py tests/providers/amazon/aws/operators/test_emr_containers.py tests/providers/amazon/aws/hooks/test_emr_containers.py
+</code></pre></div><p>Now, let&rsquo;s make sure we have an example DAG to run.</p>
+<h2 id="integration-testing">Integration Testing</h2>
+<h3 id="example-dags">Example DAGs</h3>
+<p>It&rsquo;s crucial to provide an example DAG to show folks how to use your new Operator.</p>
+<p>It&rsquo;s <em>also</em> crucial to have an example DAG so you can make sure your Operator works!</p>
+<p>For AWS, example DAGs live in <code>airflow/providers/amazon/aws/example_dags</code>. For testing, however, you&rsquo;ll need to copy or link your DAG into <code>files/dags</code>. When you run <code>breeze</code>, it will mount that directory and the DAG will be available to Airflow.</p>
+<h3 id="build-your-provider-package">Build your provider package</h3>
+<p>First, we need to build a local version of our provider package with the <code>prepare-provider-packages</code> command.</p>
+<p><em>You may receive an error like <code>The tag providers-amazon/2.0.0 exists. Not preparing the package.</code> - if you do, you&rsquo;ll need to provide a suffix to the <code>prepare-provider-packages</code> command with the <code>-S</code> flag.</em></p>
+<p>Then you can hop into Airflow</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./breeze prepare-provider-packages amazon -S dev
+./breeze start-airflow --use-airflow-version wheel --use-packages-from-dist
+</code></pre></div><p>If you run <code>breeze</code> without the <code>start-airflow</code>, you&rsquo;ll just get dropped into a bash prompt and need to start the webserver and scheduler manually. I recommend just letting Breeze take care of that.</p>
+<p><img loading="lazy" src="breeze_shell.png" alt=""  />
+</p>
+<p>Once in the shell, you may need to create a user to be able to login to the Airflow UI.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">airflow users create --role Admin --username admin --password admin --email admin@example.com --firstname foo --lastname bar
+</code></pre></div><p>By default, port 28080 gets forward to Airflow so you should be able to browse to <a href="http://localhost:28080">http://localhost:28080</a> and login as <code>admin</code>/<code>admin</code>.</p>
+<p><img loading="lazy" src="airflow_dag_ui.png" alt=""  />
+</p>
+<h3 id="run-your-example-dag">Run your example DAG</h3>
+<p>In theory, you can Unpause your DAG in the UI and run it, but it&rsquo;s likely you need some environment variables.</p>
+<p>With AWS, you&rsquo;ll need to define access credentials and region. You can create a new Connection to do this, or just do so in your Airflow shell.</p>
+<p>Since we&rsquo;re working localy, we&rsquo;ll use temporary access keys, but in a production environment your Airflow workers should use <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html">IAM roles</a>.</p>
+<p><em>The following commands will all be executed in the <code>breeze</code> shell.</em></p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">export AWS_ACCESS_KEY_ID<span style="color:#f92672">=</span>AKIAIOSFODNN7EXAMPLE
+export AWS_SECRET_ACCESS_KEY<span style="color:#f92672">=</span>wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+export AWS_DEFAULT_REGION<span style="color:#f92672">=</span>us-east-1
+</code></pre></div><p>Next, we&rsquo;ll try to run our example DAG using <code>airflow dags test</code>!</p>
+<p>Our script requires the EMR on EKS virtual cluster ID and job role ARN, so we&rsquo;ll supply those as environment variables.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">VIRTUAL_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno0123456789 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
+</code></pre></div><p>You should see the job spin up and display logs in your console.</p>
+<p><img loading="lazy" src="emr_eks_dag_run.png" alt=""  />
+</p>
+<p>And if you refresh the Airflow UI you should see a successful run! If not&hellip;it&rsquo;s time to debug.</p>
+<h2 id="documentation">Documentation</h2>
+<p>OK! So&hellip;you&rsquo;ve built your new Operator. You&rsquo;ve written (and run) all your tests. Now it&rsquo;s time to help other folks use it!</p>
+<p>The documentation was also a little bit tricky for me as it&rsquo;s in <a href="https://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html">reStructuredText</a> format. I typically write in Markdown, so reST was a little foreign.</p>
+<p>Fortunately, you can use <code>./breeze build-docs -- --package-filter apache-airflow-providers-amazon</code> to build the docs for a specific package.</p>
+<p>Once you do that, the docs will be available in <code>docs/_build/docs/apache-airflow-providers-amazon/latest/index.html</code>. The links may not always work if you just open the file locally, but you should be able to make sure everything looks OK.</p>
+<p>One awesome feature of reST is the ability to import snippets from other files and the Airflow docs make extensive use of this. For example, in my example DAG I have the following code:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># [START howto_operator_emr_eks_env_variables]</span>
+VIRTUAL_CLUSTER_ID <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>getenv(<span style="color:#e6db74">&#34;VIRTUAL_CLUSTER_ID&#34;</span>, <span style="color:#e6db74">&#34;test-cluster&#34;</span>)
+JOB_ROLE_ARN <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>getenv(<span style="color:#e6db74">&#34;JOB_ROLE_ARN&#34;</span>, <span style="color:#e6db74">&#34;arn:aws:iam::012345678912:role/emr_eks_default_role&#34;</span>)
+<span style="color:#75715e"># [END howto_operator_emr_eks_env_variables]</span>
+</code></pre></div><p>Note the <code>START</code> and <code>END</code> blocks. With those in there, I can include that snippet in my docs like so:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rest" data-lang="rest">.. <span style="color:#f92672">exampleinclude</span>:: /../../airflow/providers/amazon/aws/example_dags/example_emr_eks_job.py<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></code></pre></div><p>And then it&rsquo;ll show up in the docs like this - pretty sweet!</p>
+<p><img loading="lazy" src="docs_import.png" alt=""  />
+</p>
+<h3 id="provideryaml"><code>provider.yaml</code></h3>
+<p>If you want your new Operator linked in the official provider docs, make sure to also update <code>provider.yaml</code> in the relevant provider.</p>
+<h2 id="merging">Merging</h2>
+<p>Now the <del>hard</del> easy part&hellip;getting your contribution merged in!</p>
+<p>The official Airflow docs have a great section on the <a href="https://github.com/apache/airflow/blob/main/CONTRIBUTING.rst#contribution-workflow">contribution workflow</a>.</p>
+<p>I think the main thing I struggled with were all the PR checks that happen automatically.</p>
+<p>I couldn&rsquo;t figure out how to run them locally (and didn&rsquo;t learn about <a href="https://github.com/apache/airflow/blob/main/STATIC_CODE_CHECKS.rst#id2"><code>pre-commit</code></a> until after this process), so a lot of my workflow went like:</p>
+<ul>
+<li>commit locally</li>
+<li>git push</li>
+<li>wait for checks to fail</li>
+<li>dive into GitHub Actions output to see what failed</li>
+<li>fix locally</li>
+<li>GOTO start</li>
+</ul>
+<p>I learned that you can use <code>breeze static-checks</code> to run a subset of the static checks locally. This is pretty helpful too if you want to avoid too many <code>git push</code>es.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./breeze static-check all -- --files airflow/providers/amazon/aws/*/emr_containers.py 
+</code></pre></div><p>That said, I&rsquo;m <em>very</em> happy there are so many checks in this project. There are a lot of things I didn&rsquo;t know about until the checks ran (like the <code>spelling_wordlist.txt</code> file) and it&rsquo;s great to have such a high level of automation to help contributors maintain the quality of their code.</p>
+<h2 id="wrapup">Wrapup</h2>
+<p>I want to send a quick shoutout to the folks in the <a href="https://apache-airflow-slack.herokuapp.com/">Airflow Slack community</a> - they&rsquo;re all super nice and welcoming. And especially the folks that reviewed my PR, who were kind enough to not make <em>too</em> much of my <code>BEEP BOOP</code> error message I had committed with my initial revision. 🤖 😆</p>
+]]></content:encoded></item><item><title>Build your own Air Quality Monitor with OpenAQ and EMR on EKS</title><link>https://dacort.dev/posts/emr-eks-custom-images-with-openaq/</link><pubDate>Thu, 24 Jun 2021 21:20:00 +0000</pubDate><guid>https://dacort.dev/posts/emr-eks-custom-images-with-openaq/</guid><description>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.
 With Amazon EMR on EKS, you can now customize and package your own Apache Spark dependencies and I use that functionality for this post.
-Overview OpenAQ maintains a publicly accessible dataset of various air quality metrics that&amp;rsquo;s updated every half hour.</description></item><item><title>Big Data Stack with CDK</title><link>https://dacort.dev/posts/cdk-big-data-stack/</link><pubDate>Fri, 18 Jun 2021 21:59:00 -0700</pubDate><guid>https://dacort.dev/posts/cdk-big-data-stack/</guid><description>How I built my own Apache Spark environment on AWS using Amazon EMR, Amazon EKS, and the AWS Cloud Development Kit (CDK).</description></item></channel></rss>
+Overview OpenAQ maintains a publicly accessible dataset of various air quality metrics that&amp;rsquo;s updated every half hour.</description><content:encoded><![CDATA[<p>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.</p>
+<p>With Amazon EMR on EKS, you can now <a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/">customize and package your own Apache Spark dependencies</a> and I use that functionality for this post.</p>
+<h2 id="overview">Overview</h2>
+<p>OpenAQ maintains a <a href="https://registry.opendata.aws/openaq/">publicly accessible dataset of various air quality metrics</a> that&rsquo;s updated every half hour. <a href="https://docs.bokeh.org/en/latest/index.html">Bokeh</a> is a popular library for Python data visualization. While it includes sample data for US county and state boundaries, we&rsquo;re going to use <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html">shapefiles from census.gov</a>.</p>
+<p>We&rsquo;ll use an Apache Spark job on EMR on EKS to read the initial dataset from the S3 bucket, filter it for use case, and then combine it with the boundary data from census.gov in order to draw a map of the current air quality.</p>
+<p>This post also shows how to use the custom containers support in EMR on EKS to build our own container image with the necessary dependencies.</p>
+<h2 id="pre-requisites">Pre-requisites</h2>
+<ul>
+<li>An AWS account with access to Amazon Elastic Container Registry (ECR)</li>
+<li>An EMR on EKS cluster already setup</li>
+<li>Docker</li>
+<li>A container registry to push your image to</li>
+</ul>
+<h2 id="building-the-emr-on-eks-container-image">Building the EMR on EKS Container Image</h2>
+<h3 id="download-the-emr-base-image">Download the EMR base image</h3>
+<p>For this post, we&rsquo;ll be using the <code>us-west-2</code> region and EMR 6.3.0 release. Each region and release has a different base image URL, and you can find the full list <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/docker-custom-images-tag.html">here</a>.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws ecr get-login-password --region us-west-2 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    | docker login --username AWS --password-stdin 895885662937.dkr.ecr.us-west-2.amazonaws.com
+
+docker pull 895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest
+</code></pre></div><h3 id="customize-the-image">Customize the image</h3>
+<p>EMR on EKS comes with a variety of <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-install-libraries-and-kernels.html">default libraries</a> installed including plotly and seaborn, but we wanted to try out Bokeh for my illustration as they have a great <a href="https://docs.bokeh.org/en/latest/docs/gallery/texas.html">choropleth example</a> and it&rsquo;s a library I&rsquo;ve been hearing about occasionally. I was hoping to use Bokeh&rsquo;s <code>sampledata</code> for US and county, but I ended up using <a href="https://geopandas.org/">GeoPandas</a> to re-project my map to a conic projection so Michigan wasn&rsquo;t squashed up against Wisconsin. :) GeoPandas makes it easy to read in shapefiles, so I just used the census.gov provided state and county data.</p>
+<p>Bokeh also uses Selenium and Chrome for it&rsquo;s static image generation, so we go ahead and install Chrome on the container image as well.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-dockerfile" data-lang="dockerfile"><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> 895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">USER</span><span style="color:#e6db74"> root</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Install Chrome</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> curl https://intoli.com/install-google-chrome.sh | bash <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    mv /usr/bin/google-chrome-stable /usr/bin/chrome<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># We need to upgrade pip in order to install pyproj</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip3 install --upgrade pip<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># If you pip install as root, use this</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip3 install <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    bokeh<span style="color:#f92672">==</span>2.3.2 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    boto3<span style="color:#f92672">==</span>1.17.93 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    chromedriver-py<span style="color:#f92672">==</span>91.0.4472.19.0 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    geopandas<span style="color:#f92672">==</span>0.9.0 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    selenium<span style="color:#f92672">==</span>3.141.0 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    shapely<span style="color:#f92672">==</span>1.7.1<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> ln -s /usr/local/lib/python3.7/site-packages/chromedriver_py/chromedriver_linux64 /usr/local/bin/chromedriver<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Install bokeh sample data to /usr/local/share</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> mkdir /root/.bokeh <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    echo <span style="color:#e6db74">&#34;sampledata_dir: /usr/local/share/bokeh&#34;</span> &gt; /root/.bokeh/config <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    bokeh sampledata<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Also install census data into the image :)</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_state_500k.zip  /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_500k.zip /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> chmod <span style="color:#ae81ff">644</span> /usr/local/share/bokeh/cb*.zip<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># This is a simple test to make sure generating the image works properly</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> test /test/<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">USER</span><span style="color:#e6db74"> hadoop:hadoop</span><span style="color:#960050;background-color:#1e0010">
+</span></code></pre></div><h3 id="build-and-push">Build and push</h3>
+<p>Great, we&rsquo;ve customized our image – now we just need to build and push it to a container registery somewhere! For this post, I chose GitHub but you can use any container registry like ECR or DockerHub.</p>
+<p><em>The below commands assume you have a GitHub Personal Access Token that has access to push images in the <code>CR_PAT</code> environment variable.</em></p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker build -t emr-6.3.0-bokeh:latest .
+
+export USERNAME<span style="color:#f92672">=</span>GH_USERNAME
+echo $CR_PAT| docker login ghcr.io -u <span style="color:#e6db74">${</span>USERNAME<span style="color:#e6db74">}</span> --password-stdin
+docker tag emr-6.3.0-bokeh:latest ghcr.io/<span style="color:#e6db74">${</span>USERNAME<span style="color:#e6db74">}</span>/emr-6.3.0-bokeh:latest
+docker push ghcr.io/<span style="color:#e6db74">${</span>USERNAME<span style="color:#e6db74">}</span>/emr-6.3.0-bokeh:latest
+</code></pre></div><p>Great, now your image is ready to go! Let&rsquo;s look at the code we&rsquo;re going to use to generate our air quality map.</p>
+<h2 id="code-walkthrough">Code walkthrough</h2>
+<p>If you already built your image, you can run the below code locally. In order to access S3 data, you&rsquo;ll have to set your <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_KEY_ID</code> environment variables.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker run --rm -it --name airq-demo <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    -e AWS_ACCESS_KEY_ID <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    -e AWS_SECRET_ACCESS_KEY <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    emr-6.3.0-bokeh <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    pyspark --deploy-mode client --master <span style="color:#e6db74">&#39;local[1]&#39;</span>
+</code></pre></div><h3 id="reading-and-filtering-openaq-data">Reading and filtering OpenAQ Data</h3>
+<p>The first thing we need to do is read the the data for today&rsquo;s date into a Spark dataframe.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">import</span> datetime
+
+date <span style="color:#f92672">=</span> f<span style="color:#e6db74">&#34;{datetime.datetime.utcnow().date()}&#34;</span>
+df <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>read<span style="color:#f92672">.</span>json(f<span style="color:#e6db74">&#34;s3://openaq-fetches/realtime-gzipped/{date}/&#34;</span>)
+df<span style="color:#f92672">.</span>show()
+</code></pre></div><pre><code>+--------------------+---------------+---------+--------------------+-------+--------------------+--------------------+------+---------+-----------------+----------+-----+-----+
+|         attribution|averagingPeriod|     city|         coordinates|country|                date|            location|mobile|parameter|       sourceName|sourceType| unit|value|
++--------------------+---------------+---------+--------------------+-------+--------------------+--------------------+------+---------+-----------------+----------+-----+-----+
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-13T22:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 25.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-13T23:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 16.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T00:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 18.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T01:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 23.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T02:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 23.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T03:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 21.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T04:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 20.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T05:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 16.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T06:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 17.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T07:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 18.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T08:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 20.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T09:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 26.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T10:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 29.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T11:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 34.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T12:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 33.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T13:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 40.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T14:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 39.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T15:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 41.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T16:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 50.0|
+|[{EPA AirNow DOS,...|   {hours, 1.0}|Abu Dhabi|{24.424399, 54.43...|     AE|{2021-06-14T17:00...|US Diplomatic Pos...| false|     pm25|StateAir_AbuDhabi|government|µg/m³| 56.0|
++--------------------+---------------+---------+--------------------+-------+--------------------+--------------------+------+---------+-----------------+----------+-----+-----+
+</code></pre><p>We can quickly see a few things:</p>
+<ol>
+<li>Data is provided from all over the globe, we just want US</li>
+<li>We have coordinates and country, but that&rsquo;s it for location data</li>
+<li>There are multiple different types of readings</li>
+<li>There are multiple different readings per day per location</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">df<span style="color:#f92672">.</span>select(<span style="color:#e6db74">&#39;unit&#39;</span>, <span style="color:#e6db74">&#39;parameter&#39;</span>)<span style="color:#f92672">.</span>distinct()<span style="color:#f92672">.</span>sort(<span style="color:#e6db74">&#34;parameter&#34;</span>)<span style="color:#f92672">.</span>show()
+</code></pre></div><pre><code>+-----+---------+                                                               
+| unit|parameter|
++-----+---------+
+|µg/m³|       bc|
+|µg/m³|       co|
+|  ppm|       co|
+|  ppm|      no2|
+|µg/m³|      no2|
+|µg/m³|       o3|
+|  ppm|       o3|
+|µg/m³|     pm10|
+|µg/m³|     pm25|
+|  ppm|      so2|
+|µg/m³|      so2|
++-----+---------+
+</code></pre><p>So, let&rsquo;s go ahead and filter down to the most recent PM2.5 reading in the United States.</p>
+<p>To do that, it&rsquo;s a couple <code>where</code> filters and then we can utilize a window function (<code>last</code>) to get the last reading.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Filter down to US locations and PM2.5 readings only</span>
+usdf <span style="color:#f92672">=</span> (
+    df<span style="color:#f92672">.</span>where(df<span style="color:#f92672">.</span>country <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;US&#34;</span>)
+    <span style="color:#f92672">.</span>where(df<span style="color:#f92672">.</span>parameter <span style="color:#f92672">==</span> <span style="color:#e6db74">&#34;pm25&#34;</span>)
+    <span style="color:#f92672">.</span>select(<span style="color:#e6db74">&#34;coordinates&#34;</span>, <span style="color:#e6db74">&#34;date&#34;</span>, <span style="color:#e6db74">&#34;parameter&#34;</span>, <span style="color:#e6db74">&#34;unit&#34;</span>, <span style="color:#e6db74">&#34;value&#34;</span>, <span style="color:#e6db74">&#34;location&#34;</span>)
+)
+
+<span style="color:#75715e"># Retrieve the most recent pm2.5 reading per county</span>
+<span style="color:#f92672">from</span> pyspark.sql.window <span style="color:#f92672">import</span> Window
+<span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> last
+windowSpec <span style="color:#f92672">=</span> (
+    Window<span style="color:#f92672">.</span>partitionBy(<span style="color:#e6db74">&#34;location&#34;</span>)
+    <span style="color:#f92672">.</span>orderBy(<span style="color:#e6db74">&#34;date.utc&#34;</span>)
+    <span style="color:#f92672">.</span>rangeBetween(Window<span style="color:#f92672">.</span>unboundedPreceding, Window<span style="color:#f92672">.</span>unboundedFollowing)
+)
+last_reading_df <span style="color:#f92672">=</span> (
+    usdf<span style="color:#f92672">.</span>withColumn(<span style="color:#e6db74">&#34;last_value&#34;</span>, last(<span style="color:#e6db74">&#34;value&#34;</span>)<span style="color:#f92672">.</span>over(windowSpec))
+    <span style="color:#f92672">.</span>select(<span style="color:#e6db74">&#34;coordinates&#34;</span>, <span style="color:#e6db74">&#34;last_value&#34;</span>)
+    <span style="color:#f92672">.</span>distinct()
+)
+
+last_reading_df<span style="color:#f92672">.</span>show()
+</code></pre></div><p>We also only selected the <code>coordinates</code> and <code>last_value</code> columns as these are all we need at this point.</p>
+<pre><code>+--------------------+----------+                                               
+|         coordinates|last_value|
++--------------------+----------+
+|{38.6619, -121.7278}|       2.0|
+| {41.9767, -91.6878}|       4.9|
+|{39.54092, -119.7...|       8.0|
+|{43.629605, -72.3...|       9.0|
+|{46.8505, -111.98...|      10.0|
+|{39.818715, -75.4...|       8.5|
++--------------------+----------+
+</code></pre><h3 id="mapping-coordinates-to-counties">Mapping coordinates to counties</h3>
+<p>This was the most &ldquo;fun&rdquo; part of this journey. Bokeh provides some sample data and I initially just created a UDF that looked up the first county ID using the Polygon <code>intersects</code> method. Unfortunately, I then wanted to re-project the map to a conical projection (Albers). Bokeh&rsquo;s geo support isn&rsquo;t very strong, so I ended up looking at using GeoPandas to do the reprojection. That worked well, but the Bokeh county data wasn&rsquo;t in a format I could use with GeoPandas so I ended up downloading <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html">Shapefiles from the Census Bureau</a>.</p>
+<p>So, we&rsquo;ve got our <code>last_reading_df</code> dataframe. Lets map those coordinates to counties. The county data is relatively small (12mb zipped) so what I did was create a broadcast variable of <code>GEOID</code> -&gt; <code>Geometry</code> mappings that could be used in a UDF to figure out if a PM2.5 reading is inside a specific county.</p>
+<ul>
+<li>Download the census data and create a broadcast variable</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">import</span> geopandas <span style="color:#f92672">as</span> gpd
+
+COUNTY_URL <span style="color:#f92672">=</span> <span style="color:#e6db74">&#39;https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_500k.zip&#39;</span>
+
+countydf <span style="color:#f92672">=</span> gpd<span style="color:#f92672">.</span>read_file(COUNTY_URL)
+bc_county <span style="color:#f92672">=</span> sc<span style="color:#f92672">.</span>broadcast(dict(zip(countydf[<span style="color:#e6db74">&#34;GEOID&#34;</span>], countydf[<span style="color:#e6db74">&#34;geometry&#34;</span>])))
+
+countydf<span style="color:#f92672">.</span>head()
+</code></pre></div><p>We can see we&rsquo;re just mapping the <code>GEOID</code> column to the <code>geometry</code> column which is a polygon object containing the county boundaries.</p>
+<pre><code>  STATEFP COUNTYFP  COUNTYNS        AFFGEOID  GEOID       NAME          NAMELSAD STUSPS  STATE_NAME LSAD       ALAND     AWATER                                           geometry
+0      21      141  00516917  0500000US21141  21141      Logan      Logan County     KY    Kentucky   06  1430224002   12479211  POLYGON ((-87.06037 36.68085, -87.06002 36.708...
+1      36      081  00974139  0500000US36081  36081     Queens     Queens County     NY    New York   06   281594050  188444349  POLYGON ((-73.96262 40.73903, -73.96243 40.739...
+2      34      017  00882278  0500000US34017  34017     Hudson     Hudson County     NJ  New Jersey   06   119640822   41836491  MULTIPOLYGON (((-74.04220 40.69997, -74.03900 ...
+3      34      019  00882228  0500000US34019  34019  Hunterdon  Hunterdon County     NJ  New Jersey   06  1108086284   24761598  POLYGON ((-75.19511 40.57969, -75.19466 40.581...
+4      21      147  00516926  0500000US21147  21147   McCreary   McCreary County     KY    Kentucky   06  1105416696   10730402  POLYGON ((-84.77845 36.60329, -84.73068 36.665...
+</code></pre><ul>
+<li>Create a UDF to find the county a coordinate is in</li>
+</ul>
+<p>This just brute forces the list of GEOIDs/polygons and returns the first GEOID that intersects. There is likely a more elegant to do this.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> udf
+<span style="color:#f92672">from</span> pyspark.sql.types <span style="color:#f92672">import</span> StringType
+<span style="color:#f92672">from</span> shapely.geometry <span style="color:#f92672">import</span> Point
+
+<span style="color:#66d9ef">def</span> <span style="color:#a6e22e">find_first_county_id</span>(longitude: float, latitude: float):
+    p <span style="color:#f92672">=</span> Point(longitude, latitude)
+    <span style="color:#66d9ef">for</span> index, geo <span style="color:#f92672">in</span> bc_county<span style="color:#f92672">.</span>value<span style="color:#f92672">.</span>items():
+        <span style="color:#66d9ef">if</span> geo<span style="color:#f92672">.</span>intersects(p):
+            <span style="color:#66d9ef">return</span> index
+    <span style="color:#66d9ef">return</span> None
+
+
+find_first_county_id_udf <span style="color:#f92672">=</span> udf(find_first_county_id, StringType())
+</code></pre></div><ul>
+<li>Now we apply to the UDF to our <code>last_reading_df</code> dataframe</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Find the county that this reading is from</span>
+mapped_county_df <span style="color:#f92672">=</span> last_reading_df<span style="color:#f92672">.</span>withColumn(
+    <span style="color:#e6db74">&#34;GEOID&#34;</span>,
+    find_first_county_id_udf(
+        last_reading_df<span style="color:#f92672">.</span>coordinates<span style="color:#f92672">.</span>longitude, last_reading_df<span style="color:#f92672">.</span>coordinates<span style="color:#f92672">.</span>latitude
+    ),
+)<span style="color:#f92672">.</span>select(<span style="color:#e6db74">&#34;GEOID&#34;</span>, <span style="color:#e6db74">&#34;last_value&#34;</span>)
+</code></pre></div><ul>
+<li>And then finally we calculate the average PM2.5 value per county</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Calculate the average reading per county</span>
+pm_avg_by_county <span style="color:#f92672">=</span> (
+    mapped_county_df<span style="color:#f92672">.</span>groupBy(<span style="color:#e6db74">&#34;GEOID&#34;</span>)
+    <span style="color:#f92672">.</span>agg({<span style="color:#e6db74">&#34;last_value&#34;</span>: <span style="color:#e6db74">&#34;avg&#34;</span>})
+    <span style="color:#f92672">.</span>withColumnRenamed(<span style="color:#e6db74">&#34;avg(last_value)&#34;</span>, <span style="color:#e6db74">&#34;avg_value&#34;</span>)
+)
+
+pm_avg_by_county<span style="color:#f92672">.</span>show(<span style="color:#ae81ff">5</span>)
+</code></pre></div><pre><code>+-----+------------------+                                                      
+|GEOID|         avg_value|
++-----+------------------+
+|31157|              16.0|
+|49053|               3.0|
+|26153|               6.9|
+|36029|               1.1|
+|42101|             10.66|
++-----+------------------+
+</code></pre><p>Cool! So now we have a <code>GEOID</code> we can use in our GeoPandas dataframe and an average value of the most recent PM2.5 reading for that county.</p>
+<h3 id="generating-our-air-quality-map">Generating our Air Quality map</h3>
+<p>Now that we&rsquo;ve got an average PM2.5 value per county, we need to join this with our map data and generate an image!</p>
+<p>The first step is reading in US State and County shapefiles. We fetched these from census.gov while building the image and they&rsquo;re stored in <code>/usr/local/share/bokeh</code>. We also exclude any state not in the continental US.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">import</span> geopandas <span style="color:#f92672">as</span> gpd
+
+STATE_FILE <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;file:///usr/local/share/bokeh/cb_2020_us_state_500k.zip&#34;</span>
+COUNTY_FILE <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;file:///usr/local/share/bokeh/cb_2020_us_county_500k.zip&#34;</span>
+EXCLUDED_STATES <span style="color:#f92672">=</span> [<span style="color:#e6db74">&#34;AK&#34;</span>, <span style="color:#e6db74">&#34;HI&#34;</span>, <span style="color:#e6db74">&#34;PR&#34;</span>, <span style="color:#e6db74">&#34;GU&#34;</span>, <span style="color:#e6db74">&#34;VI&#34;</span>, <span style="color:#e6db74">&#34;MP&#34;</span>, <span style="color:#e6db74">&#34;AS&#34;</span>]
+
+county_df <span style="color:#f92672">=</span> gpd<span style="color:#f92672">.</span>read_file(COUNTY_FILE)<span style="color:#f92672">.</span>query(f<span style="color:#e6db74">&#34;STUSPS not in {EXCLUDED_STATES}&#34;</span>)
+state_df <span style="color:#f92672">=</span> gpd<span style="color:#f92672">.</span>read_file(STATE_FILE)<span style="color:#f92672">.</span>query(f<span style="color:#e6db74">&#34;STUSPS not in {EXCLUDED_STATES}&#34;</span>)
+</code></pre></div><p>Now we just do a simple <code>merge</code> on the GeoPandas dataframe, convert our maps to the Albers projection and save them as JSON objects.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Merge in our air quality data</span>
+county_aqi_df <span style="color:#f92672">=</span> county_df<span style="color:#f92672">.</span>merge(pm_avg_by_county<span style="color:#f92672">.</span>toPandas(), on<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;GEOID&#34;</span>)
+
+<span style="color:#75715e"># Convert to a &#34;proper&#34; Albers projection :)</span>
+state_json <span style="color:#f92672">=</span> state_df<span style="color:#f92672">.</span>to_crs(<span style="color:#e6db74">&#34;ESRI:102003&#34;</span>)<span style="color:#f92672">.</span>to_json()
+county_json <span style="color:#f92672">=</span> county_aqi_df<span style="color:#f92672">.</span>to_crs(<span style="color:#e6db74">&#34;ESRI:102003&#34;</span>)<span style="color:#f92672">.</span>to_json()
+</code></pre></div><p>Now comes the fun part! Our data is all prepped, we&rsquo;ve averaged the most recent data by county, and built a GeoJSON file of everything we need. Let&rsquo;s map it!</p>
+<p>I won&rsquo;t go into the details of every line, but we&rsquo;ll make use of Bokeh&rsquo;s awesome <code>GeoJSONDataSource</code> functionality, add a <code>LinearColorMapper</code> that automatically shades the counties for us by the <code>avg_value</code> column using the <code>Reds9</code> palette, and adds a <code>ColorBar</code> on the right-hand side.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> bokeh.models <span style="color:#f92672">import</span> ColorBar, GeoJSONDataSource, LinearColorMapper
+<span style="color:#f92672">from</span> bokeh.palettes <span style="color:#f92672">import</span> Reds9 <span style="color:#66d9ef">as</span> palette
+<span style="color:#f92672">from</span> bokeh.plotting <span style="color:#f92672">import</span> figure
+
+p <span style="color:#f92672">=</span> figure(
+    title<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;US Air Quality Data&#34;</span>,
+    plot_width<span style="color:#f92672">=</span><span style="color:#ae81ff">1100</span>,
+    plot_height<span style="color:#f92672">=</span><span style="color:#ae81ff">700</span>,
+    toolbar_location<span style="color:#f92672">=</span>None,
+    x_axis_location<span style="color:#f92672">=</span>None,
+    y_axis_location<span style="color:#f92672">=</span>None,
+    tooltips<span style="color:#f92672">=</span>[
+        (<span style="color:#e6db74">&#34;County&#34;</span>, <span style="color:#e6db74">&#34;@NAME&#34;</span>),
+        (<span style="color:#e6db74">&#34;Air Quality Index&#34;</span>, <span style="color:#e6db74">&#34;@avg_value&#34;</span>),
+    ],
+)
+p<span style="color:#f92672">.</span>grid<span style="color:#f92672">.</span>grid_line_color <span style="color:#f92672">=</span> None
+
+<span style="color:#75715e"># This just adds our state lines</span>
+p<span style="color:#f92672">.</span>patches(
+    <span style="color:#e6db74">&#34;xs&#34;</span>,
+    <span style="color:#e6db74">&#34;ys&#34;</span>,
+    fill_alpha<span style="color:#f92672">=</span><span style="color:#ae81ff">0.0</span>,
+    line_color<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;black&#34;</span>,
+    line_width<span style="color:#f92672">=</span><span style="color:#ae81ff">0.5</span>,
+    source<span style="color:#f92672">=</span>GeoJSONDataSource(geojson<span style="color:#f92672">=</span>state_json),
+)
+
+<span style="color:#75715e"># Add our county data and shade them based on &#34;avg_value&#34;</span>
+color_mapper <span style="color:#f92672">=</span> LinearColorMapper(palette<span style="color:#f92672">=</span>tuple(reversed(palette)))
+color_column <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;avg_value&#34;</span>
+p<span style="color:#f92672">.</span>patches(
+    <span style="color:#e6db74">&#34;xs&#34;</span>,
+    <span style="color:#e6db74">&#34;ys&#34;</span>,
+    fill_alpha<span style="color:#f92672">=</span><span style="color:#ae81ff">0.7</span>,
+    fill_color<span style="color:#f92672">=</span>{<span style="color:#e6db74">&#34;field&#34;</span>: color_column, <span style="color:#e6db74">&#34;transform&#34;</span>: color_mapper},
+    line_color<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;black&#34;</span>,
+    line_width<span style="color:#f92672">=</span><span style="color:#ae81ff">0.5</span>,
+    source<span style="color:#f92672">=</span>GeoJSONDataSource(geojson<span style="color:#f92672">=</span>county_json),
+)
+
+<span style="color:#75715e"># Now add a color bar legend on the right-hand side</span>
+color_bar <span style="color:#f92672">=</span> ColorBar(color_mapper<span style="color:#f92672">=</span>color_mapper, label_standoff<span style="color:#f92672">=</span><span style="color:#ae81ff">12</span>, width<span style="color:#f92672">=</span><span style="color:#ae81ff">10</span>)
+p<span style="color:#f92672">.</span>add_layout(color_bar, <span style="color:#e6db74">&#34;right&#34;</span>)
+</code></pre></div><p>Finally, let&rsquo;s go ahead export the png!</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> bokeh.io <span style="color:#f92672">import</span> export_png
+<span style="color:#f92672">from</span> bokeh.io.webdriver <span style="color:#f92672">import</span> create_chromium_webdriver
+
+driver <span style="color:#f92672">=</span> create_chromium_webdriver([<span style="color:#e6db74">&#34;--no-sandbox&#34;</span>])
+export_png(p, filename<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;map.png&#34;</span>, webdriver<span style="color:#f92672">=</span>driver)
+</code></pre></div><p>Now, if you&rsquo;re running on a mac, you can just copy the generated map to your local system and open it up!</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker cp airq-demo:/home/hadoop/map.png .
+open map.png
+</code></pre></div><p><img loading="lazy" src="/images/posts-airq-map.png" alt="Air Quality map"  />
+</p>
+<h3 id="running-on-emr-on-eks">Running on EMR on EKS</h3>
+<p>I&rsquo;ve bundled this all up into a pyspark script in my <code>demo-code</code> repo.</p>
+<p>This demo assumes you already have an EMR on EKS virtual cluster up and running, you&rsquo;ve built the image in the first part and pushed it to a container registry, and the IAM Role you use to run the job has access to both read and write to an S3 bucket.</p>
+<p>First, download the <code>generate_aqi_map.py</code> code from the GitHub repo.</p>
+<p>Then, upload that script to an S3 bucket you have access to.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws s3 cp generate_aqi_map.py s3://&lt;BUCKET&gt;/code/
+</code></pre></div><p>Now, just run your job! The pyspark script takes a few parameters:</p>
+<ul>
+<li><code>&lt;S3_BUCKET&gt;</code> - The S3 bucket where you want to upload the generated image to</li>
+<li><code>&lt;PREFIX&gt;</code> - The prefix in the bucket where you want the image located</li>
+<li><code>--date 2021-01-01</code> (optional)  - A specific date for which you want to generate data for
+<ul>
+<li>Defaults to UTC today</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">export S3_BUCKET<span style="color:#f92672">=</span>&lt;BUCKET_NAME&gt;
+export EMR_EKS_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno1234567890
+export EMR_EKS_EXECUTION_ARN<span style="color:#f92672">=</span>arn:aws:iam::123456789012:role/emr_eks_default_role
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#75715e"># Replace ghcr.io/OWNER/emr-6.3.0-bokeh:latest below with your image URL</span>
+aws emr-containers start-job-run <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --name openaq-conus <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --job-driver <span style="color:#e6db74">&#39;{
+</span><span style="color:#e6db74">        &#34;sparkSubmitJobDriver&#34;: {
+</span><span style="color:#e6db74">            &#34;entryPoint&#34;: &#34;s3://&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;/code/generate_aqi_map.py&#34;,
+</span><span style="color:#e6db74">            &#34;entryPointArguments&#34;: [&#34;&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;&#34;, &#34;output/airq/&#34;],
+</span><span style="color:#e6db74">            &#34;sparkSubmitParameters&#34;: &#34;--conf spark.kubernetes.container.image=ghcr.io/OWNER/emr-6.3.0-bokeh:latest&#34;
+</span><span style="color:#e6db74">        }
+</span><span style="color:#e6db74">    }&#39;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --configuration-overrides <span style="color:#e6db74">&#39;{
+</span><span style="color:#e6db74">        &#34;monitoringConfiguration&#34;: {
+</span><span style="color:#e6db74">            &#34;s3MonitoringConfiguration&#34;: { &#34;logUri&#34;: &#34;s3://&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;/logs/&#34; }
+</span><span style="color:#e6db74">        }
+</span><span style="color:#e6db74">    }&#39;</span>
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+    <span style="color:#f92672">&#34;id&#34;</span>: <span style="color:#e6db74">&#34;0000000abcdefg12345&#34;</span>,
+    <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;openaq-conus&#34;</span>,
+    <span style="color:#f92672">&#34;arn&#34;</span>: <span style="color:#e6db74">&#34;arn:aws:emr-containers:us-east-2:123456789012:/virtualclusters/abcdefghijklmno1234567890/jobruns/0000000abcdefg12345&#34;</span>,
+    <span style="color:#f92672">&#34;virtualClusterId&#34;</span>: <span style="color:#e6db74">&#34;abcdefghijklmno1234567890&#34;</span>
+}
+</code></pre></div><p>While the job is running, you can get the fetch the status of the job using the <code>emr-containers describe-job-run</code> command.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws emr-containers describe-job-run <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --id 0000000abcdefg12345
+</code></pre></div><p>Once the job is in the <code>COMPLETED</code> state, you should be able to copy the resulting image from your S3 bucket!</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws s3 cp s3://<span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span>/output/airq/2021-06-24-latest.png .
+</code></pre></div><p>And if you open that file, you&rsquo;ll get the most recent PM2.5 readings!</p>
+<p><img loading="lazy" src="/images/posts-airq-map.png" alt="Air Quality map"  />
+</p>
+<h2 id="wrapup">Wrapup</h2>
+<p>Be sure to check out the <a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/">launch post</a> for more details, the documentation for <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/docker-custom-images.html">customing docker images for EMR on EKS</a>, and my <a href="https://youtu.be/0x4DRKmNPfQ">demo video</a>.</p>
+]]></content:encoded></item><item><title>Big Data Stack with CDK</title><link>https://dacort.dev/posts/cdk-big-data-stack/</link><pubDate>Fri, 18 Jun 2021 21:59:00 -0700</pubDate><guid>https://dacort.dev/posts/cdk-big-data-stack/</guid><description>How I built my own Apache Spark environment on AWS using Amazon EMR, Amazon EKS, and the AWS Cloud Development Kit (CDK).</description><content:encoded><![CDATA[<p>I wanted to write a post about how I built my own Apache Spark environment on AWS using Amazon EMR, Amazon EKS, and the AWS Cloud Development Kit (CDK). This stack also creates an EMR Studio environment that can be used to build and deploy data notebooks.</p>
+<p><em>Disclaimer: I work for AWS on the EMR team and built this stack for my <a href="https://www.youtube.com/channel/UCKtlXVZC2DqzayRlZYLObZw">various demos</a> and it is not intended for production use-cases.</em> 🙏</p>
+<p>Also note that the commands below are for demonstration purposes only, the full code is available in my <a href="https://github.com/dacort/demo-code/tree/main/cdk/big-data-stack">demo-code/cdk/big-data-stack</a> repository.</p>
+<h2 id="overview">Overview</h2>
+<p>At re:Invent 2020, AWS introduced EMR on EKS - a way to run Apache Spark workloads on Kubernetes using managed services. Once you&rsquo;re up and running, you can submit a Spark job to EMR on EKS with a single AWS CLI command. But provisioning EKS, ensuring it has all the necessary resources to run your jobs, creating IAM roles and Kubernetes service accounts, and linking those back to EMR can be a lot of manual effort. Using AWS CDK, we can easily provision the entire stack:</p>
+<ul>
+<li>A VPC in 3 availability zones</li>
+<li>An EKS cluster with the following addons
+<ul>
+<li>Cluster Autoscaler</li>
+<li>Kubernetes Dashboard</li>
+</ul>
+</li>
+<li>An EMR virtual cluster connected to our EKS cluster</li>
+<li>An EMR Studio environment
+<ul>
+<li>A Service Catalog cluster template</li>
+</ul>
+</li>
+</ul>
+<p>This is the high-level architecture of what the resulting stack will look like. Now let&rsquo;s walk through each different piece.</p>
+<p><img loading="lazy" src="/images/cdk-big-data-stack-arch.png" alt="CDK Big Data Stack architecture"  />
+</p>
+<h2 id="vpc">VPC</h2>
+<p>This is probably the easiest part of the whole setup. In CDK, you can provision a VPC with the following code:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> aws_cdk <span style="color:#f92672">import</span> aws_ec2 <span style="color:#66d9ef">as</span> ec2
+
+ec2<span style="color:#f92672">.</span>Vpc(self, <span style="color:#e6db74">&#34;EMRDemos&#34;</span>, max_azs<span style="color:#f92672">=</span><span style="color:#ae81ff">3</span>)
+</code></pre></div><p>And you&rsquo;re done. 🎉 In my stack, I make the resulting <code>ec2.Vpc</code> object an attribute on the VPC stack so I can use it in other parts of my stack.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">app <span style="color:#f92672">=</span> cdk<span style="color:#f92672">.</span>App()
+
+vpc <span style="color:#f92672">=</span> VPCStack(app, <span style="color:#e6db74">&#34;VPCStack&#34;</span>)
+eks <span style="color:#f92672">=</span> EKSStack(app, <span style="color:#e6db74">&#34;EKSStack&#34;</span>, vpc<span style="color:#f92672">.</span>vpc)
+emr_containers <span style="color:#f92672">=</span> EMRContainersStack(app, <span style="color:#e6db74">&#34;EMRContainers&#34;</span>, vpc<span style="color:#f92672">.</span>vpc, eks<span style="color:#f92672">.</span>cluster)
+emr_studio <span style="color:#f92672">=</span> EMRStudio(app, <span style="color:#e6db74">&#34;EMRStudio&#34;</span>, vpc<span style="color:#f92672">.</span>vpc, <span style="color:#e6db74">&#34;big-data-studio&#34;</span>)
+
+app<span style="color:#f92672">.</span>synth()
+</code></pre></div><p>Let&rsquo;s walk through what happens in each of these stacks.</p>
+<h2 id="eksstack">EKSStack</h2>
+<p>This one is a little more complex. In many cases, you only need to stand up your EKS cluster once and you&rsquo;ll use that in perpetuity. But there certainly are cases where you might provision multiple EKS stacks for security or organizational reasons. Provisioning an EKS stack in CDK is relatively straightforward.</p>
+<ul>
+<li>First, provision the EKS Cluster</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> aws_cdk <span style="color:#f92672">import</span> (
+    aws_eks <span style="color:#66d9ef">as</span> eks,
+    aws_ec2 <span style="color:#66d9ef">as</span> ec2,
+    aws_iam <span style="color:#66d9ef">as</span> iam,
+)
+
+cluster <span style="color:#f92672">=</span> eks<span style="color:#f92672">.</span>Cluster(
+    self,
+    <span style="color:#e6db74">&#34;EksForSpark&#34;</span>,
+    cluster_name<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;data-team&#34;</span>,
+    version<span style="color:#f92672">=</span>eks<span style="color:#f92672">.</span>KubernetesVersion<span style="color:#f92672">.</span>V1_19,
+    default_capacity<span style="color:#f92672">=</span><span style="color:#ae81ff">0</span>,
+    endpoint_access<span style="color:#f92672">=</span>eks<span style="color:#f92672">.</span>EndpointAccess<span style="color:#f92672">.</span>PUBLIC_AND_PRIVATE,
+    vpc<span style="color:#f92672">=</span>vpc,
+    vpc_subnets<span style="color:#f92672">=</span>[ec2<span style="color:#f92672">.</span>SubnetSelection(subnet_type<span style="color:#f92672">=</span>ec2<span style="color:#f92672">.</span>SubnetType<span style="color:#f92672">.</span>PRIVATE)],
+)
+</code></pre></div><ul>
+<li>Then, add one or more <a href="https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html">managed node groups</a>.</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">nodegroup <span style="color:#f92672">=</span> cluster<span style="color:#f92672">.</span>add_nodegroup_capacity(
+    <span style="color:#e6db74">&#34;base-node-group&#34;</span>,
+    instance_types<span style="color:#f92672">=</span>[ec2<span style="color:#f92672">.</span>InstanceType(<span style="color:#e6db74">&#34;m5.xlarge&#34;</span>)],     <span style="color:#75715e"># You could add additional instance types here</span>
+    min_size<span style="color:#f92672">=</span><span style="color:#ae81ff">1</span>,                                         <span style="color:#75715e"># The node group can scale to 1</span>
+    max_size<span style="color:#f92672">=</span><span style="color:#ae81ff">20</span>,                                        <span style="color:#75715e"># And up to 20 nodes</span>
+    disk_size<span style="color:#f92672">=</span><span style="color:#ae81ff">50</span>,                                       <span style="color:#75715e"># Give each node 50gb of disk</span>
+)
+</code></pre></div><ul>
+<li>You&rsquo;ll also likely want to grant an IAM role admin access to the cluster</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">admin_iam_role_name <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;Admin&#34;</span>           <span style="color:#75715e"># This role must already exist in your AWS account</span>
+account_id <span style="color:#f92672">=</span> cdk<span style="color:#f92672">.</span>Aws<span style="color:#f92672">.</span>ACCOUNT_ID
+admin_role <span style="color:#f92672">=</span> iam<span style="color:#f92672">.</span>Role<span style="color:#f92672">.</span>from_role_arn(
+    self, <span style="color:#e6db74">&#34;admin_role&#34;</span>, f<span style="color:#e6db74">&#34;arn:aws:iam::{account_id}:role/{admin_role_name}&#34;</span>
+)
+cluster<span style="color:#f92672">.</span>aws_auth<span style="color:#f92672">.</span>add_masters_role(admin_role)
+</code></pre></div><h3 id="cluster-autoscaler">Cluster Autoscaler</h3>
+<p>Finally, a critical component to install is the <a href="https://docs.aws.amazon.com/eks/latest/userguide/cluster-autoscaler.html">Cluster Autoscaler</a>. The EKS documentation shows how to deploy it using the <code>kubectl</code> command, but I wanted to wrap this up in the CDK stack. I also ran into <a href="https://github.com/kubernetes/autoscaler/issues/3901">this issue</a> where a Helm chart for 1.19 doesn&rsquo;t exist. 🙁.</p>
+<p>So I created an <a href="https://github.com/dacort/demo-code/blob/main/cdk/big-data-stack/plugins/eks/autoscaler.py">autoscaler module</a> that I can easily apply to my cluster and node groups.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">cluster_name <span style="color:#f92672">=</span> <span style="color:#e6db74">&#34;data-team&#34;</span>
+
+ClusterAutoscaler(
+    cluster_name, self, cluster, [nodegroup]
+)<span style="color:#f92672">.</span>enable_autoscaling()
+</code></pre></div><p>This code performs the following steps in order to enable the cluster autoscaler on an EKS cluster:</p>
+<ul>
+<li>Adds tags to the passed node groups to enable auto discovery</li>
+<li>Creates a new IAM Role that can change Auto Scaling Groups</li>
+<li>Creates a Kubernetes service account</li>
+<li>Creates a new cluster-autoscaler deployment</li>
+<li>Creates the corresponding rbac rules</li>
+</ul>
+<h3 id="kubernetes-dashboard">Kubernetes Dashboard</h3>
+<p>The Kubernetes Dashboard is also extremely valuable to be able to examine what&rsquo;s happening in your EKS cluster. It&rsquo;s easy to install by using the CDK <code>add_helm_chart</code> functionality.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">chart <span style="color:#f92672">=</span> cluster<span style="color:#f92672">.</span>add_helm_chart(
+    <span style="color:#e6db74">&#34;kubernetes-dashboard&#34;</span>,
+    namespace<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;kubernetes-dashboard&#34;</span>,
+    chart<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;kubernetes-dashboard&#34;</span>,
+    repository<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;https://kubernetes.github.io/dashboard/&#34;</span>,
+    values<span style="color:#f92672">=</span>{
+        <span style="color:#e6db74">&#34;fullnameOverride&#34;</span>: <span style="color:#e6db74">&#34;kubernetes-dashboard&#34;</span>,  <span style="color:#75715e"># This must be set to acccess the UI via `kubectl proxy`</span>
+        <span style="color:#e6db74">&#34;extraArgs&#34;</span>: [<span style="color:#e6db74">&#34;--token-ttl=0&#34;</span>],              <span style="color:#75715e"># This prevents your access token from expiring, but is not intended for a production environment</span>
+    },
+)
+</code></pre></div><p>💁 Note that I&rsquo;m setting <code>--token-ttl=0</code> so I don&rsquo;t have to re-sign in to the Dashboard every 10(!) minutes, but you shouldn&rsquo;t use this in a production environment. There&rsquo;s some more info about <a href="https://blinkeye.github.io/post/public/2019-05-30-kubernetes-dashboard/">adjusting the timeout the dashboard here</a>.</p>
+<h2 id="emrcontainersstack">EMRContainersStack</h2>
+<p>A pre-requisite to running EMR on EKS is that you have to map the <code>AWSServiceRoleForAmazonEMRContainers</code> role to the EKS cluster. In order to prevent a circular dependency, I ended up doing this in the EKS stack.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">service_role_name <span style="color:#f92672">=</span> f<span style="color:#e6db74">&#34;arn:aws:iam::{cdk.Aws.ACCOUNT_ID}:role/AWSServiceRoleForAmazonEMRContainers&#34;</span>
+emrsvcrole <span style="color:#f92672">=</span> iam<span style="color:#f92672">.</span>Role<span style="color:#f92672">.</span>from_role_arn(
+    self, <span style="color:#e6db74">&#34;EmrSvcRole&#34;</span>, service_role_name, mutable<span style="color:#f92672">=</span>False
+)
+cluster<span style="color:#f92672">.</span>aws_auth<span style="color:#f92672">.</span>add_role_mapping(
+    emrsvcrole, groups<span style="color:#f92672">=</span>[], username<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;emr-containers&#34;</span>
+)
+</code></pre></div><p><a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/setting-up.html">Setting up EMR on EKS</a> requires several steps:</p>
+<ul>
+<li>Create a namespace for EMR to use</li>
+<li>Create a k8s cluster role for EMR</li>
+<li>Bind the cluster role to the <code>emr-containers</code> user we created above</li>
+<li>Create a (nicely-named) job execution role</li>
+<li>And then create our EMR virtual cluster</li>
+</ul>
+<p>If you want to <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-create-eks-cluster.html">use EMR Studio with EMR on EKS</a>, you can also (optionally) create a managed endpoint. I don&rsquo;t quite have this fully automated with CDK yet.</p>
+<p>I won&rsquo;t detail the whole setup here because it&rsquo;s about 400 lines of Python code, but you can see my <a href="https://github.com/dacort/demo-code/blob/main/cdk/big-data-stack/stacks/eks.py">EMR on EKS Stack</a> on GitHub.</p>
+<p>⚠️ One thing to call out is that inside the <code>create_job_execution_role</code> method, we create a new job role we can use to run our jobs on EMR on EKS. This role is, admittedly, way overscoped and allows full access to S3, EC2, Glue, and CloudWatch. It is heavily recommended that you scope down the permissions this role has.</p>
+<h2 id="emrstudio">EMRStudio</h2>
+<p><a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-set-up.html">Setting up EMR Studio</a> requires the creation of several Studio-specific IAM roles, an S3 bucket for Studio assets, and mapping an AWS SSO user to the Studio.</p>
+<p>The <code>EMRStudio</code> stack performs all these steps as well as tagging the provided VPC with <code>for-use-with-amazon-emr-managed-policies=true</code> so that if you&rsquo;re creating EMR clusters from Studio, the necessary resources can be created.</p>
+<p>If you&rsquo;re creating a Studio environment from scratch, there is also an <a href="https://github.com/aws-samples/emr-studio-samples">EMR Studio Samples</a> GitHub repository that provides CloudFormation templates for creating an environment as well as a sample Apache Airflow DAG for triggering EMR on EKS jobs.</p>
+<p>I won&rsquo;t dive too deep into this because it&rsquo;s again about 600 lines of Python code (largely IAM policies), but this is the CDK code that creates the EMR Studio.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">studio <span style="color:#f92672">=</span> emr<span style="color:#f92672">.</span>CfnStudio(
+    self,
+    construct_id,
+    name<span style="color:#f92672">=</span>name,
+    auth_mode<span style="color:#f92672">=</span><span style="color:#e6db74">&#34;SSO&#34;</span>,
+    vpc_id<span style="color:#f92672">=</span>vpc<span style="color:#f92672">.</span>vpc_id,
+    default_s3_location<span style="color:#f92672">=</span>studio_bucket<span style="color:#f92672">.</span>s3_url_for_object(),
+    engine_security_group_id<span style="color:#f92672">=</span>engine_sg<span style="color:#f92672">.</span>security_group_id,
+    workspace_security_group_id<span style="color:#f92672">=</span>workspace_sg<span style="color:#f92672">.</span>security_group_id,
+    service_role<span style="color:#f92672">=</span>service_role<span style="color:#f92672">.</span>role_arn,
+    user_role<span style="color:#f92672">=</span>user_role<span style="color:#f92672">.</span>role_arn,
+    subnet_ids<span style="color:#f92672">=</span>vpc<span style="color:#f92672">.</span>select_subnets()<span style="color:#f92672">.</span>subnet_ids,
+)
+</code></pre></div><h2 id="deploying">Deploying</h2>
+<h3 id="prerequisites">Prerequisites</h3>
+<ul>
+<li>Node &gt;=14.x and <a href="https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html">CDK</a></li>
+<li>Python &gt;= 3.9 and <a href="https://docs.python-guide.org/dev/virtualenvs/#lower-level-virtualenv">virtualenv</a></li>
+<li>An IAM role you want to grant admin access to EKS</li>
+<li><a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-enable-sso.html">AWS SSO configured</a> in the AWS Region where you are deploying
+<ul>
+<li>A user in SSO you want to grant access to EMR Studio</li>
+</ul>
+</li>
+<li><a href="https://kubernetes.io/docs/tasks/tools/">kubectl</a> if you wish to access the Kubernetes Dashboard</li>
+</ul>
+<h3 id="setup">Setup</h3>
+<ul>
+<li>Clone my <a href="https://github.com/dacort/demo-code"><code>demo-code</code></a> repository and <code>cd</code> into the <code>cdk/big-data-stack</code> directory</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">git clone https://github.com/dacort/demo-code.git
+cd demo-code/cdk/big-data-stack
+</code></pre></div><ul>
+<li>Create a Python virtualenv and install the necessary dependencies</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">virtualenv -p python3 .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+</code></pre></div><h3 id="deploy">Deploy</h3>
+<ul>
+<li>Bootstrap CDK for the AWS account and Region you want to deploy in</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">cdk bootstrap aws://account/region
+</code></pre></div><ul>
+<li>Deploy your big data stack!
+<ul>
+<li><code>eks_admin_role_name</code> is the IAM role you want to have admin access to EKS</li>
+<li><code>studio_admin_user_name</code> is the AWS SSO user you want to grant access to EMR Studio</li>
+</ul>
+</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">cdk deploy --all -c eks_admin_role_name<span style="color:#f92672">=</span>Admin -c studio_admin_user_name<span style="color:#f92672">=</span>dacort
+</code></pre></div><p>This will synthesize your stack into a set of CloudFormation templates and then roll out each piece of the stack.</p>
+<p>If everything goes well, you should get a set of big green checkmarks!</p>
+<p>Each stack may also print out a set of &ldquo;Outputs&rdquo; and there are three in particular I want to highlight.</p>
+<ol>
+<li><code>EMRContainers.EMRVirtualClusterID = abcdefghijklmno1234567890</code></li>
+</ol>
+<p>This is the ID of your EMR virtual cluster - you&rsquo;ll need this to run jobs.</p>
+<ol>
+<li><code>EMRContainers.JobRoleArn = arn:aws:iam::012345678912:role/emr_eks_default_role</code></li>
+</ol>
+<p>This is the IAM role created in the <code>EMRContainers</code> stack that you can use to run your EMR on EKS jobs.</p>
+<ol start="2">
+<li><code>EKSStack.EksForSparkConfigCommandABCD1234 = aws eks update-kubeconfig --name data-team --region us-east-2 --role-arn arn:aws:iam::012345678912:role/EKSStack-EksForSparkMastersRoleABCD1234-ABCDEF123456</code></li>
+</ol>
+<p>This is the command you can use to add the new EKS cluster to your kubeconfig file so you can use <code>kubectl</code> commands.</p>
+<h3 id="access-the-kubernetes-dashboard">Access the Kubernetes Dashboard</h3>
+<p>We want to be able to inspect pods and other resources on our clusters. In order to do that, we need to use <code>kubectl</code> to proxy location connections to the EKS cluster.</p>
+<p>First, run the command in the <code>EKSStack.EksForSparkConfigCommandABCD1234</code> output above. Then, use <code>kubectl proxy</code>.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">➜ kubectl proxy
+Starting to serve on 127.0.0.1:8001
+</code></pre></div><p>Next, fetch a token that you can use to login to the Dashboard.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">SECRET_NAME<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>kubectl -n kube-system get secret | grep eks-admin | awk <span style="color:#e6db74">&#39;{print $1}&#39;</span><span style="color:#66d9ef">)</span>
+TOKEN<span style="color:#f92672">=</span><span style="color:#66d9ef">$(</span>kubectl -n kube-system describe secret $SECRET_NAME | grep -E <span style="color:#e6db74">&#39;^token&#39;</span> | cut -f2 -d<span style="color:#e6db74">&#39;:&#39;</span> | tr -d <span style="color:#e6db74">&#34; &#34;</span><span style="color:#66d9ef">)</span>
+
+echo $TOKEN
+</code></pre></div><p>Copy the value that&rsquo;s output, open up the following URL in your browser, and paste the token where it says &ldquo;Enter token *&rdquo;</p>
+<p><a href="http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:https/proxy/#!/login">http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:https/proxy/#!/login</a></p>
+<p><img loading="lazy" src="k8s-dashboard-login.png" alt=""  />
+</p>
+<blockquote>
+<p>A quick note about the URL above. It is constructed dynamically from the namespace and service names used in the kubernetes-dashboard helm chart. We&rsquo;ve defined the <code>fullnameOverride</code> value in the config for that chart or else the service name would be dynamic.</p>
+</blockquote>
+<p>Now that you&rsquo;re logged in, you should be able to browse to the &ldquo;Pods&rdquo; section and select <code>emr-jobs</code> from the namespace dropdown next to the search box. You won&rsquo;t have any pods yet, but they&rsquo;ll show up there when you run a job.</p>
+<h3 id="run-a-job">Run a job</h3>
+<p>With everything all deployed, you should be able to run a sample job through EMR on EKS.</p>
+<blockquote>
+<p>Note that the values of <code>virtual-cluster-id</code> and <code>execution-role-arn</code> can be obtained from the values output by your <code>cdk deploy command</code></p>
+</blockquote>
+<pre><code>EMRContainers.EMRVirtualClusterID = abcdefghijklmno1234567890
+EMRContainers.JobRoleArn = arn:aws:iam::012345678912:role/emr_eks_default_role
+</code></pre><p>Take those values and replace in the job below!</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">export EMR_EKS_CLUSTER_ID<span style="color:#f92672">=</span>&lt;EMRVirtualClusterID&gt;
+export EMR_EKS_EXECUTION_ARN<span style="color:#f92672">=</span>&lt;JobRoleArn&gt;
+
+aws emr-containers start-job-run <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --name pi-test <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    --job-driver <span style="color:#e6db74">&#39;{
+</span><span style="color:#e6db74">        &#34;sparkSubmitJobDriver&#34;: {
+</span><span style="color:#e6db74">            &#34;entryPoint&#34;: &#34;local:///usr/lib/spark/examples/src/main/python/pi.py&#34;,
+</span><span style="color:#e6db74">            &#34;sparkSubmitParameters&#34;: &#34;--conf spark.executor.instances=1 --conf spark.executor.memory=2G --conf spark.executor.cores=1 --conf spark.driver.cores=1&#34;
+</span><span style="color:#e6db74">        }
+</span><span style="color:#e6db74">    }&#39;</span>
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+    <span style="color:#f92672">&#34;id&#34;</span>: <span style="color:#e6db74">&#34;0000000abcdef123456&#34;</span>,
+    <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;pi-test&#34;</span>,
+    <span style="color:#f92672">&#34;arn&#34;</span>: <span style="color:#e6db74">&#34;arn:aws:emr-containers:us-east-2:012345678912:/virtualclusters/abcdefghijklmno1234567890/jobruns/0000000abcdef123456&#34;</span>,
+    <span style="color:#f92672">&#34;virtualClusterId&#34;</span>: <span style="color:#e6db74">&#34;abcdefghijklmno1234567890&#34;</span>
+}
+</code></pre></div><h2 id="wrapup">Wrapup</h2>
+<p>Take a look at my <a href="https://www.youtube.com/watch?v=2UMz72NRZss&amp;list=PLUe6KRx8LhLpJ8CyNHewFYukWm7sQyQrM">EMR on EKS playlists</a> for more examples.</p>
+<p>And if you installed the EMR Studio stack, you can see your Studio URL in the <code>EMRStudio.EMRStudioURL</code> variable, or you can list your Studios and the access URL via the <code>aws emr list-studios</code> command.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws emr list-studios
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+    <span style="color:#f92672">&#34;Studios&#34;</span>: [
+        {
+            <span style="color:#f92672">&#34;StudioId&#34;</span>: <span style="color:#e6db74">&#34;es-01234567890ABCDEFGHIJKLMN&#34;</span>,
+            <span style="color:#f92672">&#34;Name&#34;</span>: <span style="color:#e6db74">&#34;big-data-studio&#34;</span>,
+            <span style="color:#f92672">&#34;VpcId&#34;</span>: <span style="color:#e6db74">&#34;vpc-abcdef012345678901&#34;</span>,
+            <span style="color:#f92672">&#34;Url&#34;</span>: <span style="color:#e6db74">&#34;https://es-01234567890ABCDEFGHIJKLMN.emrstudio-prod.us-east-1.amazonaws.com&#34;</span>,
+            <span style="color:#f92672">&#34;CreationTime&#34;</span>: <span style="color:#e6db74">&#34;2021-06-02T16:20:56.548000-07:00&#34;</span>
+        }
+    ]
+}
+</code></pre></div>]]></content:encoded></item></channel></rss>
