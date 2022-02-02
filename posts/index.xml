@@ -1,4 +1,507 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Posts on Damon Cortesi</title><link>https://dacort.dev/posts/</link><description>Recent content in Posts on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 29 Sep 2021 09:49:03 -0700</lastBuildDate><atom:link href="https://dacort.dev/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>SSH to EC2 Instances with Session Manager</title><link>https://dacort.dev/posts/ssh-to-ec2-instances-with-session-manager/</link><pubDate>Wed, 29 Sep 2021 09:49:03 -0700</pubDate><guid>https://dacort.dev/posts/ssh-to-ec2-instances-with-session-manager/</guid><description>I&amp;rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&amp;rsquo;s) so I&amp;rsquo;m really used to SSH&amp;rsquo;ing into hosts. More often than not, however, I&amp;rsquo;m working with AWS EC2 instances in a private subnet.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Posts on Damon Cortesi</title><link>https://dacort.dev/posts/</link><description>Recent content in Posts on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 02 Feb 2022 14:22:22 -0800</lastBuildDate><atom:link href="https://dacort.dev/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.dev/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.dev/posts/modern-data-lake-storage-layers/</guid><description>In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, Uber announced Hudi - an incremental processing framework for data pipelines. In 2018, Netflix introduced Iceberg - a new table format for managing extremely large cloud datasets. And in 2019, Databricks open-sourced Delta Lake - originally intended to bring ACID transactions to data lakes.
+📹 If you&amp;rsquo;d like to watch a video that discusses the content of this post, I&amp;rsquo;ve also recorded an overview here.</description><content:encoded><![CDATA[<p>In recent years we&rsquo;ve seen a rise in new storage layers for data lakes. In 2017, <a href="https://eng.uber.com/hoodie/">Uber announced Hudi</a> - an incremental processing framework for data pipelines. In 2018, <a href="https://conferences.oreilly.com/strata/strata-ny-2018/public/schedule/detail/69503.html">Netflix introduced Iceberg</a> - a new table format for managing extremely large cloud datasets. And in 2019, <a href="https://techcrunch.com/2019/04/24/databricks-open-sources-delta-lake-to-make-data-lakes-more-reliable/">Databricks open-sourced Delta Lake</a> - originally intended to bring ACID transactions to data lakes.</p>
+<blockquote>
+<p>📹 <em>If you&rsquo;d like to watch a video that discusses the content of this post, I&rsquo;ve also recorded <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA">an overview here</a>. Each relevant section below will also link to individual timestamps.</em></p>
+</blockquote>
+<p>This post aims to introduce each of these engines and give some insight into how they function under the hood and some of the differences in each. While I&rsquo;ll summarize the findings here, you can also view my Jupyter notebooks for each in my <a href="https://github.com/dacort/modern-data-lake-storage-layers/tree/main/notebooks">modern-data-lake-storage-layers</a> repository. We begin with basic operations of writing and updating datasets.</p>
+<p>One thing to note about all of these frameworks is that each began with a different challenge they were solving for, but over time they have begun to converge on a common set of functionality.</p>
+<h2 id="apache-hudi">Apache Hudi</h2>
+<blockquote>
+<p>📹 <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA&amp;t=323s">Intro to Apache Hudi video</a></p>
+</blockquote>
+<p>Apache Hudi (Hadoop Upsert Delete and Incremental) was originally designed as an incremental stream processing framework and was built to combine the benefits of stream and batch processing. Hudi can be used with Spark, Flink, Presto, Trino and Hive, but much of the original work was focused around Spark and that&rsquo;s what I use for these examples.</p>
+<p>For Hudi, we create a simple Spark DataFrame partitioned by <code>creation_date</code> and write that to S3.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Create a DataFrame</span>
+inputDF <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>createDataFrame(
+    [
+        (<span style="color:#e6db74">&#34;100&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:39.340396Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;101&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:14:58.597216Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;102&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.417052Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;103&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.519832Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;104&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:15:00.512679Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;105&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:42.248818Z&#34;</span>),
+    ],
+    [<span style="color:#e6db74">&#34;id&#34;</span>, <span style="color:#e6db74">&#34;creation_date&#34;</span>, <span style="color:#e6db74">&#34;last_update_time&#34;</span>],
+)
+
+<span style="color:#75715e"># Specify common DataSourceWriteOptions in the single hudiOptions variable</span>
+hudiOptions <span style="color:#f92672">=</span> {
+    <span style="color:#e6db74">&#34;hoodie.table.name&#34;</span>: <span style="color:#e6db74">&#34;my_hudi_table&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.write.recordkey.field&#34;</span>: <span style="color:#e6db74">&#34;id&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.write.partitionpath.field&#34;</span>: <span style="color:#e6db74">&#34;creation_date&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.write.precombine.field&#34;</span>: <span style="color:#e6db74">&#34;last_update_time&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.enable&#34;</span>: <span style="color:#e6db74">&#34;true&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.table&#34;</span>: <span style="color:#e6db74">&#34;my_hudi_table&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.partition_fields&#34;</span>: <span style="color:#e6db74">&#34;creation_date&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.partition_extractor_class&#34;</span>: <span style="color:#e6db74">&#34;org.apache.hudi.hive.MultiPartKeysValueExtractor&#34;</span>,
+    <span style="color:#e6db74">&#34;hoodie.index.type&#34;</span>: <span style="color:#e6db74">&#34;GLOBAL_BLOOM&#34;</span>,  <span style="color:#75715e"># This is required if we want to ensure we upsert a record, even if the partition changes</span>
+    <span style="color:#e6db74">&#34;hoodie.bloom.index.update.partition.path&#34;</span>: <span style="color:#e6db74">&#34;true&#34;</span>,  <span style="color:#75715e"># This is required to write the data into the new partition (defaults to false in 0.8.0, true in 0.9.0)</span>
+}
+
+<span style="color:#75715e"># Write a DataFrame as a Hudi dataset</span>
+inputDF<span style="color:#f92672">.</span>write<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;org.apache.hudi&#34;</span>)<span style="color:#f92672">.</span>option(
+    <span style="color:#e6db74">&#34;hoodie.datasource.write.operation&#34;</span>, <span style="color:#e6db74">&#34;insert&#34;</span>
+)<span style="color:#f92672">.</span>options(<span style="color:#f92672">**</span>hudiOptions)<span style="color:#f92672">.</span>mode(<span style="color:#e6db74">&#34;overwrite&#34;</span>)<span style="color:#f92672">.</span>save(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/hudi/&#34;</span>)
+</code></pre></div><p>When we look at the file structure on S3, we see a few things:</p>
+<ol>
+<li>A <code>hoodie.properties</code> file</li>
+</ol>
+<pre><code>2022-01-14 00:33:46        503 tmp/hudi/.hoodie/hoodie.properties
+</code></pre><p>This file contains certain metadata about the Hudi dataset:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ini" data-lang="ini"><span style="color:#75715e">#Properties saved on Fri Jan 14 00:33:45 UTC 2022</span>
+<span style="color:#75715e">#Fri Jan 14 00:33:45 UTC 2022</span>
+<span style="color:#a6e22e">hoodie.table.precombine.field</span><span style="color:#f92672">=</span><span style="color:#e6db74">last_update_time</span>
+<span style="color:#a6e22e">hoodie.table.partition.fields</span><span style="color:#f92672">=</span><span style="color:#e6db74">creation_date</span>
+<span style="color:#a6e22e">hoodie.table.type</span><span style="color:#f92672">=</span><span style="color:#e6db74">COPY_ON_WRITE</span>
+<span style="color:#a6e22e">hoodie.archivelog.folder</span><span style="color:#f92672">=</span><span style="color:#e6db74">archived</span>
+<span style="color:#a6e22e">hoodie.populate.meta.fields</span><span style="color:#f92672">=</span><span style="color:#e6db74">true</span>
+<span style="color:#a6e22e">hoodie.timeline.layout.version</span><span style="color:#f92672">=</span><span style="color:#e6db74">1</span>
+<span style="color:#a6e22e">hoodie.table.version</span><span style="color:#f92672">=</span><span style="color:#e6db74">2</span>
+<span style="color:#a6e22e">hoodie.table.recordkey.fields</span><span style="color:#f92672">=</span><span style="color:#e6db74">id</span>
+<span style="color:#a6e22e">hoodie.table.base.file.format</span><span style="color:#f92672">=</span><span style="color:#e6db74">PARQUET</span>
+<span style="color:#a6e22e">hoodie.table.keygenerator.class</span><span style="color:#f92672">=</span><span style="color:#e6db74">org.apache.hudi.keygen.SimpleKeyGenerator</span>
+<span style="color:#a6e22e">hoodie.table.name</span><span style="color:#f92672">=</span><span style="color:#e6db74">my_hudi_table</span>
+</code></pre></div><ol start="2">
+<li>A set of commit-related files</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-14 00:33:57       2706 tmp/hudi/.hoodie/20220114003341.commit
+2022-01-14 00:33:48          0 tmp/hudi/.hoodie/20220114003341.commit.requested
+2022-01-14 00:33:52       1842 tmp/hudi/.hoodie/20220114003341.inflight
+</code></pre></div><ol start="3">
+<li>The actual <code>.parquet</code> data files and associated metadata organized into date-based partitions.</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-14 00:33:54         93 tmp/hudi/2015-01-01/.hoodie_partition_metadata
+2022-01-14 00:33:54     434974 tmp/hudi/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet
+2022-01-14 00:33:55         93 tmp/hudi/2015-01-02/.hoodie_partition_metadata
+2022-01-14 00:33:55     434943 tmp/hudi/2015-01-02/43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet
+</code></pre></div><p>We then update the <code>creation_date</code> of one row in this dataset.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> lit
+
+<span style="color:#75715e"># Create a new DataFrame from the first row of inputDF with a different creation_date value</span>
+updateDF <span style="color:#f92672">=</span> inputDF<span style="color:#f92672">.</span>where(<span style="color:#e6db74">&#34;id = 100&#34;</span>)<span style="color:#f92672">.</span>withColumn(<span style="color:#e6db74">&#34;creation_date&#34;</span>, lit(<span style="color:#e6db74">&#34;2022-01-11&#34;</span>))
+
+updateDF<span style="color:#f92672">.</span>show()
+
+<span style="color:#75715e"># Update by using the &#34;upsert&#34; operation</span>
+updateDF<span style="color:#f92672">.</span>write<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;org.apache.hudi&#34;</span>)<span style="color:#f92672">.</span>option(
+    <span style="color:#e6db74">&#34;hoodie.datasource.write.operation&#34;</span>, <span style="color:#e6db74">&#34;upsert&#34;</span>
+)<span style="color:#f92672">.</span>options(<span style="color:#f92672">**</span>hudiOptions)<span style="color:#f92672">.</span>mode(<span style="color:#e6db74">&#34;append&#34;</span>)<span style="color:#f92672">.</span>save(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/hudi/&#34;</span>)
+</code></pre></div><p>One thing to note here is that since we&rsquo;re updating a partition value (<strong>DANGER!</strong>), we had to set the <code>hoodie.index.type</code> to <code>GLOBAL_BLOOM</code> as well as setting <code>hoodie.bloom.index.update.partition.path</code> to <code>true</code>. This can have a large impact on performance so normally we would try not to change a partition value in a production environment, but it&rsquo;s useful here to see the impact it has. You can mind more details in the Hudi FAQ about <a href="https://hudi.apache.org/learn/faq/#how-does-the-hudi-indexing-work--what-are-its-benefits">Hudi indexing</a>.</p>
+<p>After this write, we have a new set of commit-related files on S3:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-14 00:34:15       2706 tmp/hudi/.hoodie/20220114003401.commit
+2022-01-14 00:34:03          0 tmp/hudi/.hoodie/20220114003401.commit.requested
+2022-01-14 00:34:08       2560 tmp/hudi/.hoodie/20220114003401.inflight
+</code></pre></div><p>And we actually have <strong>2</strong> new <code>.parquet</code> files:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-14 00:34:12     434925 tmp/hudi/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet
+...
+2022-01-14 00:34:13         93 tmp/hudi/2022-01-11/.hoodie_partition_metadata
+2022-01-14 00:34:14     434979 tmp/hudi/2022-01-11/0c210872-484e-428b-a9ca-90a26e42125c-0_1-43-13681_20220114003401.parquet
+</code></pre></div><p>So what happened with the update is that the old partition (<code>2015-01-01</code>) had its data overwritten and the new partition (<code>2022-01-11</code>) <em>also</em> had data written to it. You can now see why the global bloom index could have such a large impact on write performance as there is significant potential for write amplication.</p>
+<p>If we query the data and add the source filename for each row, we can also see that data for the old partition now comes from the new parquet file (notice the commit ID <code>20220114003401</code> shows up in the filename):</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span>  pyspark.sql.functions <span style="color:#f92672">import</span> input_file_name
+
+snapshotQueryDF <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>read \
+    <span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#39;org.apache.hudi&#39;</span>) \
+    <span style="color:#f92672">.</span>load(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/hudi/&#34;</span>) \
+    <span style="color:#f92672">.</span>select(<span style="color:#e6db74">&#39;id&#39;</span>, <span style="color:#e6db74">&#39;creation_date&#39;</span>) \
+    <span style="color:#f92672">.</span>withColumn(<span style="color:#e6db74">&#34;filename&#34;</span>, input_file_name())
+    
+snapshotQueryDF<span style="color:#f92672">.</span>show(truncate<span style="color:#f92672">=</span>False)
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">+---+-------------+------------------------------------------------------------------------------------------------------------------------------+
+|id |creation_date|filename                                                                                                                      |
++---+-------------+------------------------------------------------------------------------------------------------------------------------------+
+|100|2022-01-11   |/hudi/2022-01-11/0c210872-484e-428b-a9ca-90a26e42125c-0_1-43-13681_20220114003401.parquet                                     |
+|105|2015-01-02   |/hudi/2015-01-02/43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet                                         |
+|104|2015-01-02   |/hudi/2015-01-02/43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet                                         |
+|102|2015-01-01   |/hudi/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet                                     |
+|103|2015-01-01   |/hudi/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet                                     |
+|101|2015-01-01   |/hudi/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet                                     |
++---+-------------+------------------------------------------------------------------------------------------------------------------------------+
+</code></pre></div><p>One other thing to note is that Hudi adds quite a bit of metadata to your Parquet files. If we use native Spark to read one of the Parquet files and show it, we see that there&rsquo;s various <code>_hoodie</code>-prefixed keys.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> split
+
+rawDF <span style="color:#f92672">=</span> (
+    spark<span style="color:#f92672">.</span>read<span style="color:#f92672">.</span>parquet(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/hudi/*/*.parquet&#34;</span>)
+    <span style="color:#f92672">.</span>withColumn(<span style="color:#e6db74">&#34;filename&#34;</span>, split(input_file_name(), <span style="color:#e6db74">&#34;tmp/hudi&#34;</span>)<span style="color:#f92672">.</span>getItem(<span style="color:#ae81ff">1</span>))
+    <span style="color:#f92672">.</span>sort(<span style="color:#e6db74">&#34;_hoodie_commit_time&#34;</span>, <span style="color:#e6db74">&#34;_hoodie_commit_seqno&#34;</span>)
+)
+rawDF<span style="color:#f92672">.</span>show(truncate<span style="color:#f92672">=</span>False)
+</code></pre></div><div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">+-------------------+--------------------+------------------+----------------------+------------------------------------------------------------------------+---+-------------+---------------------------+------------------------------------------------------------------------------------+
+|_hoodie_commit_time|_hoodie_commit_seqno|_hoodie_record_key|_hoodie_partition_path|_hoodie_file_name                                                       |id |creation_date|last_update_time           |filename                                                                            |
++-------------------+--------------------+------------------+----------------------+------------------------------------------------------------------------+---+-------------+---------------------------+------------------------------------------------------------------------------------+
+|20220114003341     |20220114003341_0_1  |100               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |100|2015-01-01   |2015-01-01T13:51:39.340396Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |
+|20220114003341     |20220114003341_0_2  |102               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |102|2015-01-01   |2015-01-01T13:51:40.417052Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet|
+|20220114003341     |20220114003341_0_2  |102               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |102|2015-01-01   |2015-01-01T13:51:40.417052Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |
+|20220114003341     |20220114003341_0_3  |103               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |103|2015-01-01   |2015-01-01T13:51:40.519832Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet|
+|20220114003341     |20220114003341_0_3  |103               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |103|2015-01-01   |2015-01-01T13:51:40.519832Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |
+|20220114003341     |20220114003341_0_4  |101               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |101|2015-01-01   |2015-01-01T12:14:58.597216Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-37-13680_20220114003401.parquet|
+|20220114003341     |20220114003341_0_4  |101               |2015-01-01            |57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |101|2015-01-01   |2015-01-01T12:14:58.597216Z|/2015-01-01/57f66198-5303-4922-9323-91737ec40d25-0_0-4-98_20220114003341.parquet    |
+|20220114003341     |20220114003341_1_5  |105               |2015-01-02            |43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet    |105|2015-01-02   |2015-01-01T13:51:42.248818Z|/2015-01-02/43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet    |
+|20220114003341     |20220114003341_1_6  |104               |2015-01-02            |43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet    |104|2015-01-02   |2015-01-01T12:15:00.512679Z|/2015-01-02/43051d12-87e7-4dfb-8201-6ce293cf0df7-0_1-6-99_20220114003341.parquet    |
+|20220114003401     |20220114003401_1_1  |100               |2022-01-11            |0c210872-484e-428b-a9ca-90a26e42125c-0_1-43-13681_20220114003401.parquet|100|2022-01-11   |2015-01-01T13:51:39.340396Z|/2022-01-11/0c210872-484e-428b-a9ca-90a26e42125c-0_1-43-13681_20220114003401.parquet|
++-------------------+--------------------+------------------+----------------------+------------------------------------------------------------------------+---+-------------+---------------------------+------------------------------------------------------------------------------------+
+</code></pre></div><p>In the background, Hudi figures out which commits and values to show based on the commit files and metadata in the parquet files.</p>
+<h2 id="apache-iceberg">Apache Iceberg</h2>
+<blockquote>
+<p>📹 <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA&amp;t=1039s">Intro to Apache Iceberg video</a></p>
+</blockquote>
+<p>When I first heard about Iceberg, the phrase &ldquo;table format for storing large, slow-moving tabular data&rdquo; didn&rsquo;t really make sense to me. But after working with data lakes at scale, it became quite clear. Apache Hive is a popular data warehouse project that provides a SQL-like interface to large datasets. Built on top of Hadoop, it originally used HDFS as its data store. With cloud migrations, object stores like Amazon S3 enabled the ability to store even more data particularly without the operational concerns of a large Hadoop cluster, but with some limitations when compared to HDFS. Specifically, directory listings are slower (simple physics here, network calls are slower), renames are not atomic (by design), and results were previously eventually consistent.</p>
+<p>So imagine you are Netflix, you have <a href="https://netflixtechblog.com/optimizing-data-warehouse-storage-7b94a48fdcbe">hundreds of petabytes of data</a> stored on S3, and you need a way for your organization to efficiently query this. You need a data storage layer that reduces or removes directory listings, you want atomic changes, and you want to ensure that when you&rsquo;re reading your data you get consistent results. <em>There is more to Iceberg, but I&rsquo;m simplifying because this helped me understand. :)</em></p>
+<p>These were some of the original goals for Iceberg, so let&rsquo;s dive in and see how it works. Similar to Hudi, we&rsquo;ll create a simple Spark DataFrame and write that to S3 in Iceberg format.</p>
+<p>I should note that much of Iceberg is focused around Spark SQL, so I will switch to that below for certain operations.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Create a DataFrame</span>
+inputDF <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>createDataFrame(
+    [
+        (<span style="color:#e6db74">&#34;100&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:39.340396Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;101&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:14:58.597216Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;102&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.417052Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;103&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.519832Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;104&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:15:00.512679Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;105&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:42.248818Z&#34;</span>),
+    ],
+    [<span style="color:#e6db74">&#34;id&#34;</span>, <span style="color:#e6db74">&#34;creation_date&#34;</span>, <span style="color:#e6db74">&#34;last_update_time&#34;</span>],
+)
+
+<span style="color:#75715e"># Write a DataFrame as an Iceberg dataset</span>
+inputDF<span style="color:#f92672">.</span>write<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;iceberg&#34;</span>)<span style="color:#f92672">.</span>mode(<span style="color:#e6db74">&#34;overwrite&#34;</span>)<span style="color:#f92672">.</span>partitionBy(<span style="color:#e6db74">&#34;creation_date&#34;</span>)<span style="color:#f92672">.</span>option(
+    <span style="color:#e6db74">&#34;path&#34;</span>, f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/iceberg/&#34;</span>
+)<span style="color:#f92672">.</span>saveAsTable(ICEBERG_TABLE_NAME)
+</code></pre></div><p>There are two main differences here - there is not as much &ldquo;configuration&rdquo; as we had to do with Hudi and we also explicitly use <code>saveAsTable</code>. With Iceberg, much of the metadata is stored in a data catalog so creating the table is necessary. Let&rsquo;s see what happened on S3.</p>
+<ol>
+<li>First, we have a <code>metadata.json</code> file</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-28 06:03:50       2457 tmp/iceberg/metadata/00000-bb1d38a9-af77-42c4-a7b7-69416fe36d9c.metadata.json
+</code></pre></div><ol start="2">
+<li>Then a snapshot <strong>manifest list</strong> file</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-28 06:03:50       3785 tmp/iceberg/metadata/snap-7934053180928033536-1-e79c79ba-c7f0-45ad-8f2e-fd1bc349db55.avro
+</code></pre></div><ol start="3">
+<li>And a manifest file</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-28 06:03:50       6244 tmp/iceberg/metadata/e79c79ba-c7f0-45ad-8f2e-fd1bc349db55-m0.avro
+</code></pre></div><ol start="4">
+<li>And finally, we&rsquo;ve got our Parquet data files</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-28 06:03:49       1197 tmp/iceberg/data/creation_date=2015-01-01/00000-4-fa9a18fd-abc4-4e04-91b4-e2ac4c9531be-00001.parquet
+2022-01-28 06:03:49       1171 tmp/iceberg/data/creation_date=2015-01-01/00001-5-eab30115-a1d6-4918-abb4-a198ac12b262-00001.parquet
+2022-01-28 06:03:50       1182 tmp/iceberg/data/creation_date=2015-01-02/00001-5-eab30115-a1d6-4918-abb4-a198ac12b262-00002.parquet
+</code></pre></div><p>There are a lot of moving pieces here, but the image from the Iceberg spec illustrates it quite well.</p>
+<p><img loading="lazy" src="iceberg-metadata.png" alt="Iceberg Metadata Diagram"  />
+</p>
+<p>Similar to Hudi, our data is written to Parquet files in each partition, although Hive-style partitioning is used by default. Hudi can also do this by setting the <a href="https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritehive_style_partitioning"><code>hoodie.datasource.write.hive_style_partitioning</code></a> parameter.</p>
+<p>Different from Hudi, though, is the usage of the data catalog to identify the current metadata file to use. That metadata file contains references to a list of manifest files to use to determine which data files compose the dataset for that particular version, also known as snapshots. The snapshot data also has quite a bit of additional informaiton. Let&rsquo;s update our dataset then take a look at S3 again and the snapshot portion of the metadata file.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python">spark<span style="color:#f92672">.</span>sql(f<span style="color:#e6db74">&#34;UPDATE {ICEBERG_TABLE_NAME} SET creation_date = &#39;2022-01-11&#39; WHERE id = 100&#34;</span>)
+</code></pre></div><p>We can see that we have:</p>
+<ul>
+<li>2 new .parquet data files</li>
+</ul>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-28 06:07:07       1180 tmp/iceberg/data/creation_date=2015-01-01/00000-16-033354bd-7b02-44f4-95e2-7045e10706fc-00001.parquet
+2022-01-28 06:07:08       1171 tmp/iceberg/data/creation_date=2022-01-11/00000-16-033354bd-7b02-44f4-95e2-7045e10706fc-00002.parquet
+</code></pre></div><p>As well as:</p>
+<ul>
+<li>1 new metadata.json file</li>
+<li>2 new .avro metadata listings</li>
+<li>1 new snap-*.avro snapshot file</li>
+</ul>
+<p>Let&rsquo;s look at the snapshot portion of the <code>metadata.json</code> file.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json"><span style="color:#e6db74">&#34;snapshots&#34;</span><span style="color:#960050;background-color:#1e0010">:</span> [
+    {
+        <span style="color:#f92672">&#34;manifest-list&#34;</span>: <span style="color:#e6db74">&#34;s3://&lt;BUCKET&gt;/tmp/iceberg/metadata/snap-7934053180928033536-1-e79c79ba-c7f0-45ad-8f2e-fd1bc349db55.avro&#34;</span>,
+        <span style="color:#f92672">&#34;schema-id&#34;</span>: <span style="color:#ae81ff">0</span>,
+        <span style="color:#f92672">&#34;snapshot-id&#34;</span>: <span style="color:#ae81ff">7934053180928033536</span>,
+        <span style="color:#f92672">&#34;summary&#34;</span>: {
+            <span style="color:#f92672">&#34;added-data-files&#34;</span>: <span style="color:#e6db74">&#34;3&#34;</span>,
+            <span style="color:#f92672">&#34;added-files-size&#34;</span>: <span style="color:#e6db74">&#34;3550&#34;</span>,
+            <span style="color:#f92672">&#34;added-records&#34;</span>: <span style="color:#e6db74">&#34;6&#34;</span>,
+            <span style="color:#f92672">&#34;changed-partition-count&#34;</span>: <span style="color:#e6db74">&#34;2&#34;</span>,
+            <span style="color:#f92672">&#34;operation&#34;</span>: <span style="color:#e6db74">&#34;append&#34;</span>,
+            <span style="color:#f92672">&#34;spark.app.id&#34;</span>: <span style="color:#e6db74">&#34;application_1643153254969_0029&#34;</span>,
+            <span style="color:#f92672">&#34;total-data-files&#34;</span>: <span style="color:#e6db74">&#34;3&#34;</span>,
+            <span style="color:#f92672">&#34;total-delete-files&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+            <span style="color:#f92672">&#34;total-equality-deletes&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+            <span style="color:#f92672">&#34;total-files-size&#34;</span>: <span style="color:#e6db74">&#34;3550&#34;</span>,
+            <span style="color:#f92672">&#34;total-position-deletes&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+            <span style="color:#f92672">&#34;total-records&#34;</span>: <span style="color:#e6db74">&#34;6&#34;</span>
+        },
+        <span style="color:#f92672">&#34;timestamp-ms&#34;</span>: <span style="color:#ae81ff">1643349829278</span>
+    },
+    {
+        <span style="color:#f92672">&#34;manifest-list&#34;</span>: <span style="color:#e6db74">&#34;s3://&lt;BUCKET&gt;/tmp/iceberg/metadata/snap-5441092870212826638-1-605de48f-8ccf-450c-935e-bbd4194ee8cc.avro&#34;</span>,
+        <span style="color:#f92672">&#34;parent-snapshot-id&#34;</span>: <span style="color:#ae81ff">7934053180928033536</span>,
+        <span style="color:#f92672">&#34;schema-id&#34;</span>: <span style="color:#ae81ff">0</span>,
+        <span style="color:#f92672">&#34;snapshot-id&#34;</span>: <span style="color:#ae81ff">5441092870212826638</span>,
+        <span style="color:#f92672">&#34;summary&#34;</span>: {
+            <span style="color:#f92672">&#34;added-data-files&#34;</span>: <span style="color:#e6db74">&#34;2&#34;</span>,
+            <span style="color:#f92672">&#34;added-files-size&#34;</span>: <span style="color:#e6db74">&#34;2351&#34;</span>,
+            <span style="color:#f92672">&#34;added-records&#34;</span>: <span style="color:#e6db74">&#34;3&#34;</span>,
+            <span style="color:#f92672">&#34;changed-partition-count&#34;</span>: <span style="color:#e6db74">&#34;2&#34;</span>,
+            <span style="color:#f92672">&#34;deleted-data-files&#34;</span>: <span style="color:#e6db74">&#34;1&#34;</span>,
+            <span style="color:#f92672">&#34;deleted-records&#34;</span>: <span style="color:#e6db74">&#34;3&#34;</span>,
+            <span style="color:#f92672">&#34;operation&#34;</span>: <span style="color:#e6db74">&#34;overwrite&#34;</span>,
+            <span style="color:#f92672">&#34;removed-files-size&#34;</span>: <span style="color:#e6db74">&#34;1197&#34;</span>,
+            <span style="color:#f92672">&#34;spark.app.id&#34;</span>: <span style="color:#e6db74">&#34;application_1643153254969_0029&#34;</span>,
+            <span style="color:#f92672">&#34;total-data-files&#34;</span>: <span style="color:#e6db74">&#34;4&#34;</span>,
+            <span style="color:#f92672">&#34;total-delete-files&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+            <span style="color:#f92672">&#34;total-equality-deletes&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+            <span style="color:#f92672">&#34;total-files-size&#34;</span>: <span style="color:#e6db74">&#34;4704&#34;</span>,
+            <span style="color:#f92672">&#34;total-position-deletes&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+            <span style="color:#f92672">&#34;total-records&#34;</span>: <span style="color:#e6db74">&#34;6&#34;</span>
+        },
+        <span style="color:#f92672">&#34;timestamp-ms&#34;</span>: <span style="color:#ae81ff">1643350027635</span>
+    }
+]
+</code></pre></div><p>This is pretty amazing - we see how many files <strong>and records</strong> were added or deleted, what the file sizes were, and even what the Spark <code>app_id</code> was! 🤯 Some of this data is in the <code>manifest-list</code> files as well, but you can begin to see <em>just</em> how much you could potentially optimize your queries using this data.</p>
+<h2 id="delta-lake">Delta Lake</h2>
+<blockquote>
+<p>📹 <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA&amp;t=1814s">Intro to Delta Lake video</a></p>
+</blockquote>
+<p>Delta Lake was also introduced by Databricks as a way to address many of the challenges of Data Lakes. Similar to Hudi and Iceberg its goals include unifying batch and stream processing, ACID transactions, and scalable metadata handling among others.</p>
+<p>Again, we&rsquo;ll create a simple Spark DataFrame and write it to S3 in Delta format.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Create a DataFrame</span>
+inputDF <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>createDataFrame(
+    [
+        (<span style="color:#e6db74">&#34;100&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:39.340396Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;101&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:14:58.597216Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;102&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.417052Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;103&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.519832Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;104&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:15:00.512679Z&#34;</span>),
+        (<span style="color:#e6db74">&#34;105&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:42.248818Z&#34;</span>),
+    ],
+    [<span style="color:#e6db74">&#34;id&#34;</span>, <span style="color:#e6db74">&#34;creation_date&#34;</span>, <span style="color:#e6db74">&#34;last_update_time&#34;</span>],
+)
+
+<span style="color:#75715e"># Write a DataFrame as a Delta dataset</span>
+inputDF<span style="color:#f92672">.</span>write<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;delta&#34;</span>)<span style="color:#f92672">.</span>mode(<span style="color:#e6db74">&#34;overwrite&#34;</span>)<span style="color:#f92672">.</span>option(
+    <span style="color:#e6db74">&#34;overwriteSchema&#34;</span>, <span style="color:#e6db74">&#34;true&#34;</span>
+)<span style="color:#f92672">.</span>partitionBy(<span style="color:#e6db74">&#34;creation_date&#34;</span>)<span style="color:#f92672">.</span>save(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/delta/&#34;</span>)
+</code></pre></div><p>On S3, we now see the following files:</p>
+<ol>
+<li>a <code>00000000000000000000.json</code> file</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-24 22:57:54       2120 tmp/delta/_delta_log/00000000000000000000.json
+</code></pre></div><ol start="2">
+<li>Several <code>.snappy.parquet</code> files</li>
+</ol>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-24 22:57:52        875 tmp/delta/creation_date=2015-01-01/part-00005-2e09dbe4-469e-40dc-9b36-833480f6d375.c000.snappy.parquet
+2022-01-24 22:57:52        875 tmp/delta/creation_date=2015-01-01/part-00010-848c69e1-71fb-4f8f-a19a-dd74e0ef1b8a.c000.snappy.parquet
+2022-01-24 22:57:53        875 tmp/delta/creation_date=2015-01-01/part-00015-937d1837-0f03-4306-9b4e-4366207e688d.c000.snappy.parquet
+2022-01-24 22:57:54        875 tmp/delta/creation_date=2015-01-01/part-00021-978a808e-4c36-4646-b7b1-ef5a21e706d8.c000.snappy.parquet
+2022-01-24 22:57:54        875 tmp/delta/creation_date=2015-01-02/part-00026-538e1ac6-055e-4e72-9177-63daaaae1f98.c000.snappy.parquet
+2022-01-24 22:57:52        875 tmp/delta/creation_date=2015-01-02/part-00031-8a03451a-0297-4c43-b64d-56db25807d02.c000.snappy.parquet
+</code></pre></div><p>OK, so what&rsquo;s in that <code>_delta_log</code> file? Similar to Iceberg, quite a bit of information about this initial write to S3 including the number of files written, the schema of the dataset, and even the individual <code>add</code> operations for each file.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+  <span style="color:#f92672">&#34;commitInfo&#34;</span>: {
+    <span style="color:#f92672">&#34;timestamp&#34;</span>: <span style="color:#ae81ff">1643065073634</span>,
+    <span style="color:#f92672">&#34;operation&#34;</span>: <span style="color:#e6db74">&#34;WRITE&#34;</span>,
+    <span style="color:#f92672">&#34;operationParameters&#34;</span>: {
+      <span style="color:#f92672">&#34;mode&#34;</span>: <span style="color:#e6db74">&#34;Overwrite&#34;</span>,
+      <span style="color:#f92672">&#34;partitionBy&#34;</span>: <span style="color:#e6db74">&#34;[\&#34;creation_date\&#34;]&#34;</span>
+    },
+    <span style="color:#f92672">&#34;isBlindAppend&#34;</span>: <span style="color:#66d9ef">false</span>,
+    <span style="color:#f92672">&#34;operationMetrics&#34;</span>: {
+      <span style="color:#f92672">&#34;numFiles&#34;</span>: <span style="color:#e6db74">&#34;6&#34;</span>,
+      <span style="color:#f92672">&#34;numOutputBytes&#34;</span>: <span style="color:#e6db74">&#34;5250&#34;</span>,
+      <span style="color:#f92672">&#34;numOutputRows&#34;</span>: <span style="color:#e6db74">&#34;6&#34;</span>
+    }
+  }
+}
+{
+  <span style="color:#f92672">&#34;protocol&#34;</span>: {
+    <span style="color:#f92672">&#34;minReaderVersion&#34;</span>: <span style="color:#ae81ff">1</span>,
+    <span style="color:#f92672">&#34;minWriterVersion&#34;</span>: <span style="color:#ae81ff">2</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;metaData&#34;</span>: {
+    <span style="color:#f92672">&#34;id&#34;</span>: <span style="color:#e6db74">&#34;a7f4b1d1-09f6-4475-894a-0eec90d1aab5&#34;</span>,
+    <span style="color:#f92672">&#34;format&#34;</span>: {
+      <span style="color:#f92672">&#34;provider&#34;</span>: <span style="color:#e6db74">&#34;parquet&#34;</span>,
+      <span style="color:#f92672">&#34;options&#34;</span>: {}
+    },
+    <span style="color:#f92672">&#34;schemaString&#34;</span>: <span style="color:#e6db74">&#34;{\&#34;type\&#34;:\&#34;struct\&#34;,\&#34;fields\&#34;:[{\&#34;name\&#34;:\&#34;id\&#34;,\&#34;type\&#34;:\&#34;string\&#34;,\&#34;nullable\&#34;:true,\&#34;metadata\&#34;:{}},{\&#34;name\&#34;:\&#34;creation_date\&#34;,\&#34;type\&#34;:\&#34;string\&#34;,\&#34;nullable\&#34;:true,\&#34;metadata\&#34;:{}},{\&#34;name\&#34;:\&#34;last_update_time\&#34;,\&#34;type\&#34;:\&#34;string\&#34;,\&#34;nullable\&#34;:true,\&#34;metadata\&#34;:{}}]}&#34;</span>,
+    <span style="color:#f92672">&#34;partitionColumns&#34;</span>: [
+      <span style="color:#e6db74">&#34;creation_date&#34;</span>
+    ],
+    <span style="color:#f92672">&#34;configuration&#34;</span>: {},
+    <span style="color:#f92672">&#34;createdTime&#34;</span>: <span style="color:#ae81ff">1643065064066</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-01/part-00005-2e09dbe4-469e-40dc-9b36-833480f6d375.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-01&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065072000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-01/part-00010-848c69e1-71fb-4f8f-a19a-dd74e0ef1b8a.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-01&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065072000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-01/part-00015-937d1837-0f03-4306-9b4e-4366207e688d.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-01&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065073000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-01/part-00021-978a808e-4c36-4646-b7b1-ef5a21e706d8.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-01&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065074000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-02/part-00026-538e1ac6-055e-4e72-9177-63daaaae1f98.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-02&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065074000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-02/part-00031-8a03451a-0297-4c43-b64d-56db25807d02.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-02&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065072000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+</code></pre></div><p>Alright, let&rsquo;s go ahead and update one of our rows. Delta Lake provides a merge operation that we can use. We&rsquo;ll use the syntax <a href="https://docs.delta.io/latest/quick-start.html#update-table-data">from the docs</a> that&rsquo;s slightly different from native Spark as it creates a DeltaTable object.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> lit
+
+<span style="color:#75715e"># Create a new DataFrame from the first row of inputDF with a different creation_date value</span>
+updateDF <span style="color:#f92672">=</span> inputDF<span style="color:#f92672">.</span>where(<span style="color:#e6db74">&#34;id = 100&#34;</span>)<span style="color:#f92672">.</span>withColumn(<span style="color:#e6db74">&#34;creation_date&#34;</span>, lit(<span style="color:#e6db74">&#34;2022-01-11&#34;</span>))
+
+<span style="color:#f92672">from</span> delta.tables <span style="color:#f92672">import</span> <span style="color:#f92672">*</span>
+<span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> <span style="color:#f92672">*</span>
+
+deltaTable <span style="color:#f92672">=</span> DeltaTable<span style="color:#f92672">.</span>forPath(spark, f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/delta/&#34;</span>)
+
+deltaTable<span style="color:#f92672">.</span>alias(<span style="color:#e6db74">&#34;oldData&#34;</span>) \
+  <span style="color:#f92672">.</span>merge(
+    updateDF<span style="color:#f92672">.</span>alias(<span style="color:#e6db74">&#34;newData&#34;</span>),
+    <span style="color:#e6db74">&#34;oldData.id = newData.id&#34;</span>) \
+  <span style="color:#f92672">.</span>whenMatchedUpdate(set <span style="color:#f92672">=</span> { <span style="color:#e6db74">&#34;creation_date&#34;</span>: col(<span style="color:#e6db74">&#34;newData.creation_date&#34;</span>) }) \
+  <span style="color:#f92672">.</span>execute()
+</code></pre></div><p>Interestingly, now when we look at S3 we see 1 new <code>json</code> file and only 1 new <code>parquet</code> file (Remember Hudi and Iceberg both had 2 new <code>parquet</code> files).</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-plain" data-lang="plain">2022-01-24 23:05:46       1018 tmp/delta/_delta_log/00000000000000000001.json
+2022-01-24 23:05:46        875 tmp/delta/creation_date=2022-01-11/part-00000-3f3fd83a-b876-4b6f-8f64-d8a4189392ae.c000.snappy.parquet
+</code></pre></div><p>If we look at that new JSON file we see something really interesting:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+  <span style="color:#f92672">&#34;commitInfo&#34;</span>: {
+    <span style="color:#f92672">&#34;timestamp&#34;</span>: <span style="color:#ae81ff">1643065545396</span>,
+    <span style="color:#f92672">&#34;operation&#34;</span>: <span style="color:#e6db74">&#34;MERGE&#34;</span>,
+    <span style="color:#f92672">&#34;operationParameters&#34;</span>: {
+      <span style="color:#f92672">&#34;predicate&#34;</span>: <span style="color:#e6db74">&#34;(oldData.`id` = newData.`id`)&#34;</span>,
+      <span style="color:#f92672">&#34;matchedPredicates&#34;</span>: <span style="color:#e6db74">&#34;[{\&#34;actionType\&#34;:\&#34;update\&#34;}]&#34;</span>,
+      <span style="color:#f92672">&#34;notMatchedPredicates&#34;</span>: <span style="color:#e6db74">&#34;[]&#34;</span>
+    },
+    <span style="color:#f92672">&#34;readVersion&#34;</span>: <span style="color:#ae81ff">0</span>,
+    <span style="color:#f92672">&#34;isBlindAppend&#34;</span>: <span style="color:#66d9ef">false</span>,
+    <span style="color:#f92672">&#34;operationMetrics&#34;</span>: {
+      <span style="color:#f92672">&#34;numTargetRowsCopied&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+      <span style="color:#f92672">&#34;numTargetRowsDeleted&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+      <span style="color:#f92672">&#34;numTargetFilesAdded&#34;</span>: <span style="color:#e6db74">&#34;1&#34;</span>,
+      <span style="color:#f92672">&#34;executionTimeMs&#34;</span>: <span style="color:#e6db74">&#34;4705&#34;</span>,
+      <span style="color:#f92672">&#34;numTargetRowsInserted&#34;</span>: <span style="color:#e6db74">&#34;0&#34;</span>,
+      <span style="color:#f92672">&#34;scanTimeMs&#34;</span>: <span style="color:#e6db74">&#34;3399&#34;</span>,
+      <span style="color:#f92672">&#34;numTargetRowsUpdated&#34;</span>: <span style="color:#e6db74">&#34;1&#34;</span>,
+      <span style="color:#f92672">&#34;numOutputRows&#34;</span>: <span style="color:#e6db74">&#34;1&#34;</span>,
+      <span style="color:#f92672">&#34;numSourceRows&#34;</span>: <span style="color:#e6db74">&#34;1&#34;</span>,
+      <span style="color:#f92672">&#34;numTargetFilesRemoved&#34;</span>: <span style="color:#e6db74">&#34;1&#34;</span>,
+      <span style="color:#f92672">&#34;rewriteTimeMs&#34;</span>: <span style="color:#e6db74">&#34;1265&#34;</span>
+    }
+  }
+}
+{
+  <span style="color:#f92672">&#34;remove&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2015-01-01/part-00005-2e09dbe4-469e-40dc-9b36-833480f6d375.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;deletionTimestamp&#34;</span>: <span style="color:#ae81ff">1643065545378</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>,
+    <span style="color:#f92672">&#34;extendedFileMetadata&#34;</span>: <span style="color:#66d9ef">true</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2015-01-01&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>
+  }
+}
+{
+  <span style="color:#f92672">&#34;add&#34;</span>: {
+    <span style="color:#f92672">&#34;path&#34;</span>: <span style="color:#e6db74">&#34;creation_date=2022-01-11/part-00000-3f3fd83a-b876-4b6f-8f64-d8a4189392ae.c000.snappy.parquet&#34;</span>,
+    <span style="color:#f92672">&#34;partitionValues&#34;</span>: {
+      <span style="color:#f92672">&#34;creation_date&#34;</span>: <span style="color:#e6db74">&#34;2022-01-11&#34;</span>
+    },
+    <span style="color:#f92672">&#34;size&#34;</span>: <span style="color:#ae81ff">875</span>,
+    <span style="color:#f92672">&#34;modificationTime&#34;</span>: <span style="color:#ae81ff">1643065546000</span>,
+    <span style="color:#f92672">&#34;dataChange&#34;</span>: <span style="color:#66d9ef">true</span>
+  }
+}
+</code></pre></div><p>In addition to the <code>operationMetrics</code> that gives us insight into how the data changed on &ldquo;disk&rdquo;, we also now see both a <code>remove</code> and <code>add</code> operation. In Delta Lake (and I&rsquo;m not quite sure why this happened yet&hellip;), each row was written to an individual <code>.parquet</code> file! So for this second version of the data, the fact that that row was updated simply lives in the metadata because it was the only row stored in that Parquet file. I&rsquo;m guessing this is simply because my dataset is so small the default number of partitions in Spark/Delta Lake resulted in this write configuration.</p>
+<h2 id="snapshots">Snapshots</h2>
+<p>So now we&rsquo;ve got a good idea of the semantics of each of these storage layers. Let&rsquo;s take one more look at an important component of all of them and that&rsquo;s snapshots!</p>
+<h3 id="hudi">Hudi</h3>
+<p>Hudi has a concept of &ldquo;point-in-time&rdquo; queries where you provide it a range of two commit timestamps and it will show you what the data looked like at that point in time.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Query data from the first version of the table</span>
+readOptions <span style="color:#f92672">=</span> {
+  <span style="color:#e6db74">&#39;hoodie.datasource.query.type&#39;</span>: <span style="color:#e6db74">&#39;incremental&#39;</span>,
+  <span style="color:#e6db74">&#39;hoodie.datasource.read.begin.instanttime&#39;</span>: <span style="color:#e6db74">&#39;0&#39;</span>,
+  <span style="color:#e6db74">&#39;hoodie.datasource.read.end.instanttime&#39;</span>: <span style="color:#e6db74">&#39;20220114003341&#39;</span>,
+}
+
+incQueryDF <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>read \
+    <span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#39;org.apache.hudi&#39;</span>) \
+    <span style="color:#f92672">.</span>options(<span style="color:#f92672">**</span>readOptions) \
+    <span style="color:#f92672">.</span>load(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/hudi&#34;</span>)
+    
+incQueryDF<span style="color:#f92672">.</span>show()
+</code></pre></div><h3 id="iceberg">Iceberg</h3>
+<p>Iceberg supports a similar mechanism called time travel and you can use either a <code>snapshot-id</code> or <code>as-of-timestamp</code> similar to Hudi.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># time travel to 2022-01-27 22:04:00 -0800</span>
+df <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>read \
+    <span style="color:#f92672">.</span>option(<span style="color:#e6db74">&#34;as-of-timestamp&#34;</span>, <span style="color:#e6db74">&#34;1643349840000&#34;</span>) \
+    <span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;iceberg&#34;</span>) \
+    <span style="color:#f92672">.</span>load(ICEBERG_TABLE_NAME)
+    
+df<span style="color:#f92672">.</span>show()
+</code></pre></div><h3 id="delta-lake-1">Delta Lake</h3>
+<p>And, of course, Delta Lake supports this as well using either <a href="https://docs.delta.io/latest/delta-batch.html#-deltatimetravel">Spark SQL or DataFrames</a>. And similar to Iceberg you can use <code>versionAsOf</code> or <code>timestampAsOf</code>.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># time travel to 2022-01-24 23:00</span>
+df1 <span style="color:#f92672">=</span> (
+    spark<span style="color:#f92672">.</span>read<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;delta&#34;</span>)
+    <span style="color:#f92672">.</span>option(<span style="color:#e6db74">&#34;timestampAsOf&#34;</span>, <span style="color:#e6db74">&#34;2022-01-24 23:00&#34;</span>)
+    <span style="color:#f92672">.</span>load(f<span style="color:#e6db74">&#34;s3://{S3_BUCKET_NAME}/tmp/delta/&#34;</span>)
+)
+</code></pre></div><h2 id="deletes">Deletes</h2>
+<p>I bet you&rsquo;re surprised I haven&rsquo;t mentioned deletes or GDPR yet. Don&rsquo;t worry&hellip;I will. 😀 But first I just wanted to understand exactly how these different systems work.</p>
+<h2 id="wrapup">Wrapup</h2>
+<p>In this post, we reviewed the basics of Apache Hudi, Apache Iceberg, and Delta Lake - modern data lake storage layers. All these frameworks enable a set of functionality that optimize working with data in cloud-based object stores, albeit with slightly different approaches.</p>
+]]></content:encoded></item><item><title>SSH to EC2 Instances with Session Manager</title><link>https://dacort.dev/posts/ssh-to-ec2-instances-with-session-manager/</link><pubDate>Wed, 29 Sep 2021 09:49:03 -0700</pubDate><guid>https://dacort.dev/posts/ssh-to-ec2-instances-with-session-manager/</guid><description>I&amp;rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&amp;rsquo;s) so I&amp;rsquo;m really used to SSH&amp;rsquo;ing into hosts. More often than not, however, I&amp;rsquo;m working with AWS EC2 instances in a private subnet.
 If you&amp;rsquo;re not familiar with it AWS Systems Manager Session Manager is a pretty sweet feature that allows you to connect remotely to EC2 instances with the AWS CLI, without needing to open up ports for SSH or utilize a bastion host.</description><content:encoded><![CDATA[<p>I&rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&rsquo;s) so I&rsquo;m really used to SSH&rsquo;ing into hosts. More often than not, however, I&rsquo;m working with AWS EC2 instances in a private subnet.</p>
 <p>If you&rsquo;re not familiar with it <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html">AWS Systems Manager Session Manager</a> is a pretty sweet feature that allows you to connect remotely to EC2 instances with the AWS CLI, without needing to open up ports for SSH or utilize a bastion host.</p>
 <p>I&rsquo;ve been using it in my browser occasionally, which is pretty handy, but I wanted to use it from my terminal. It required a couple steps to get working.</p>

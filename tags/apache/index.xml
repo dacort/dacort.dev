@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>hudi on Damon Cortesi</title><link>https://dacort.dev/tags/hudi/</link><description>Recent content in hudi on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 02 Feb 2022 14:22:22 -0800</lastBuildDate><atom:link href="https://dacort.dev/tags/hudi/index.xml" rel="self" type="application/rss+xml"/><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.dev/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.dev/posts/modern-data-lake-storage-layers/</guid><description>In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, Uber announced Hudi - an incremental processing framework for data pipelines. In 2018, Netflix introduced Iceberg - a new table format for managing extremely large cloud datasets. And in 2019, Databricks open-sourced Delta Lake - originally intended to bring ACID transactions to data lakes.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>apache on Damon Cortesi</title><link>https://dacort.dev/tags/apache/</link><description>Recent content in apache on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 02 Feb 2022 14:22:22 -0800</lastBuildDate><atom:link href="https://dacort.dev/tags/apache/index.xml" rel="self" type="application/rss+xml"/><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.dev/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.dev/posts/modern-data-lake-storage-layers/</guid><description>In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, Uber announced Hudi - an incremental processing framework for data pipelines. In 2018, Netflix introduced Iceberg - a new table format for managing extremely large cloud datasets. And in 2019, Databricks open-sourced Delta Lake - originally intended to bring ACID transactions to data lakes.
 📹 If you&amp;rsquo;d like to watch a video that discusses the content of this post, I&amp;rsquo;ve also recorded an overview here.</description><content:encoded><![CDATA[<p>In recent years we&rsquo;ve seen a rise in new storage layers for data lakes. In 2017, <a href="https://eng.uber.com/hoodie/">Uber announced Hudi</a> - an incremental processing framework for data pipelines. In 2018, <a href="https://conferences.oreilly.com/strata/strata-ny-2018/public/schedule/detail/69503.html">Netflix introduced Iceberg</a> - a new table format for managing extremely large cloud datasets. And in 2019, <a href="https://techcrunch.com/2019/04/24/databricks-open-sources-delta-lake-to-make-data-lakes-more-reliable/">Databricks open-sourced Delta Lake</a> - originally intended to bring ACID transactions to data lakes.</p>
 <blockquote>
 <p>📹 <em>If you&rsquo;d like to watch a video that discusses the content of this post, I&rsquo;ve also recorded <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA">an overview here</a>. Each relevant section below will also link to individual timestamps.</em></p>
@@ -501,84 +501,4 @@ df1 <span style="color:#f92672">=</span> (
 <p>I bet you&rsquo;re surprised I haven&rsquo;t mentioned deletes or GDPR yet. Don&rsquo;t worry&hellip;I will. 😀 But first I just wanted to understand exactly how these different systems work.</p>
 <h2 id="wrapup">Wrapup</h2>
 <p>In this post, we reviewed the basics of Apache Hudi, Apache Iceberg, and Delta Lake - modern data lake storage layers. All these frameworks enable a set of functionality that optimize working with data in cloud-based object stores, albeit with slightly different approaches.</p>
-]]></content:encoded></item><item><title>Updating Partition Values With Apache Hudi</title><link>https://dacort.dev/posts/updating-partition-values-with-apache-hudi/</link><pubDate>Thu, 23 Sep 2021 11:51:57 -0700</pubDate><guid>https://dacort.dev/posts/updating-partition-values-with-apache-hudi/</guid><description>If you&amp;rsquo;re not familiar with Apache Hudi, it&amp;rsquo;s a pretty awesome piece of software that brings transactions and record-level updates/deletes to data lakes.
-More specifically, if you&amp;rsquo;re doing Analytics with S3, Hudi provides a way for you to consistently update records in your data lake, which historically has been pretty challenging. It can also optimize file sizes, allow for rollbacks, and makes streaming CDC data impressively easy.
-Updating Partition Values I&amp;rsquo;m learning more about Hudi and was following this EMR guide to working with a Hudi dataset, but the &amp;ldquo;Upsert&amp;rdquo; operation didn&amp;rsquo;t quite work as I expected.</description><content:encoded><![CDATA[<p>If you&rsquo;re not familiar with <a href="https://hudi.apache.org/">Apache Hudi</a>, it&rsquo;s a pretty awesome piece of software that brings transactions and record-level updates/deletes to data lakes.</p>
-<p>More specifically, if you&rsquo;re doing Analytics with S3, Hudi provides a way for you to <em>consistently</em> update records in your data lake, which historically has been pretty challenging. It can also optimize file sizes, allow for rollbacks, and makes <a href="https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-available-in-amazon-emr/">streaming CDC data impressively easy</a>.</p>
-<h2 id="updating-partition-values">Updating Partition Values</h2>
-<p>I&rsquo;m learning more about Hudi and was following this <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-work-with-dataset.html">EMR guide to working with a Hudi dataset</a>, but the &ldquo;Upsert&rdquo; operation didn&rsquo;t quite work as I expected. Instead of overwriting the desired record, it added a second one with the same ID. 🤔</p>
-<p>After some furious searching, I finally came across this post about <a href="https://hudi.apache.org/blog/2020/11/11/hudi-indexing-mechanisms/">employing the right indexes in Apache Hudi</a>. Specifically, this line caught my attention:</p>
-<blockquote>
-<p><strong>Global indexes enforce uniqueness of keys across all partitions of a table i.e guarantees that exactly one record exists in the table for a given record key.</strong></p>
-</blockquote>
-<p>Ah-ha! In the example, we&rsquo;re updating a partition value. <em>BY DEFAULT</em>, the <code>hoodie.index.type</code> is <code>BLOOM</code>. I tried changing it to <code>GLOBAL_BLOOM</code>, and when updating the record, it wrote it into the old partition. It turns out that there is <em>also</em> a <code>hoodie.bloom.index.update.partition.path</code> setting that will also update the partition path. This defaults to <code>true</code> in Hudi v0.9.0, but I&rsquo;m using v0.8.0 where it defaults to <code>false</code>.</p>
-<p><em>Note that there is a performance/storage impact to enabling global indexes</em></p>
-<p>So flipping that, I got the expected behavior. Using the example from the EMR docs, my code now looks like this:</p>
-<h3 id="writing-initial-dataset">Writing initial dataset</h3>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># Create a DataFrame</span>
-inputDF <span style="color:#f92672">=</span> spark<span style="color:#f92672">.</span>createDataFrame(
-    [
-        (<span style="color:#e6db74">&#34;100&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:39.340396Z&#34;</span>),
-        (<span style="color:#e6db74">&#34;101&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:14:58.597216Z&#34;</span>),
-        (<span style="color:#e6db74">&#34;102&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.417052Z&#34;</span>),
-        (<span style="color:#e6db74">&#34;103&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:40.519832Z&#34;</span>),
-        (<span style="color:#e6db74">&#34;104&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T12:15:00.512679Z&#34;</span>),
-        (<span style="color:#e6db74">&#34;105&#34;</span>, <span style="color:#e6db74">&#34;2015-01-02&#34;</span>, <span style="color:#e6db74">&#34;2015-01-01T13:51:42.248818Z&#34;</span>),
-    ],
-    [<span style="color:#e6db74">&#34;id&#34;</span>, <span style="color:#e6db74">&#34;creation_date&#34;</span>, <span style="color:#e6db74">&#34;last_update_time&#34;</span>],
-)
-
-<span style="color:#75715e"># Specify common DataSourceWriteOptions in the single hudiOptions variable</span>
-hudiOptions <span style="color:#f92672">=</span> {
-    <span style="color:#e6db74">&#34;hoodie.table.name&#34;</span>: <span style="color:#e6db74">&#34;my_hudi_table&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.write.recordkey.field&#34;</span>: <span style="color:#e6db74">&#34;id&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.write.partitionpath.field&#34;</span>: <span style="color:#e6db74">&#34;creation_date&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.write.precombine.field&#34;</span>: <span style="color:#e6db74">&#34;last_update_time&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.enable&#34;</span>: <span style="color:#e6db74">&#34;true&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.table&#34;</span>: <span style="color:#e6db74">&#34;my_hudi_table&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.partition_fields&#34;</span>: <span style="color:#e6db74">&#34;creation_date&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.datasource.hive_sync.partition_extractor_class&#34;</span>: <span style="color:#e6db74">&#34;org.apache.hudi.hive.MultiPartKeysValueExtractor&#34;</span>,
-    <span style="color:#e6db74">&#34;hoodie.index.type&#34;</span>: <span style="color:#e6db74">&#34;GLOBAL_BLOOM&#34;</span>,                 <span style="color:#75715e"># This is required if we want to ensure we upsert a record, even if the partition changes</span>
-    <span style="color:#e6db74">&#34;hoodie.bloom.index.update.partition.path&#34;</span>: <span style="color:#e6db74">&#34;true&#34;</span>,  <span style="color:#75715e"># This is required to write the data into the new partition (defaults to false in 0.8.0, true in 0.9.0)</span>
-}
-
-<span style="color:#75715e"># Write a DataFrame as a Hudi dataset</span>
-(
-    inputDF<span style="color:#f92672">.</span>write<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;org.apache.hudi&#34;</span>)
-    <span style="color:#f92672">.</span>option(<span style="color:#e6db74">&#34;hoodie.datasource.write.operation&#34;</span>, <span style="color:#e6db74">&#34;insert&#34;</span>)
-    <span style="color:#f92672">.</span>options(<span style="color:#f92672">**</span>hudiOptions)
-    <span style="color:#f92672">.</span>mode(<span style="color:#e6db74">&#34;overwrite&#34;</span>)
-    <span style="color:#f92672">.</span>save(<span style="color:#e6db74">&#34;s3://&lt;BUCKET&gt;/tmp/myhudidataset_001/&#34;</span>)
-)
-</code></pre></div><h3 id="updating-one-partition-row">Updating one <em>partition</em> row</h3>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#f92672">from</span> pyspark.sql.functions <span style="color:#f92672">import</span> lit
-
-updateDF <span style="color:#f92672">=</span> inputDF<span style="color:#f92672">.</span>limit(<span style="color:#ae81ff">1</span>)<span style="color:#f92672">.</span>withColumn(<span style="color:#e6db74">&#39;creation_date&#39;</span>, lit(<span style="color:#e6db74">&#39;2021-09-22&#39;</span>))
-
-(
-    updateDF<span style="color:#f92672">.</span>write<span style="color:#f92672">.</span>format(<span style="color:#e6db74">&#34;org.apache.hudi&#34;</span>)
-    <span style="color:#f92672">.</span>option(<span style="color:#e6db74">&#34;hoodie.datasource.write.operation&#34;</span>, <span style="color:#e6db74">&#34;upsert&#34;</span>)
-    <span style="color:#f92672">.</span>options(<span style="color:#f92672">**</span>hudiOptions)
-    <span style="color:#f92672">.</span>mode(<span style="color:#e6db74">&#34;append&#34;</span>)
-    <span style="color:#f92672">.</span>save(<span style="color:#e6db74">&#34;s3://&lt;BUCKET&gt;/tmp/myhudidataset_001/&#34;</span>)
-)
-</code></pre></div><h3 id="resulting-parquet-files">Resulting Parquet Files</h3>
-<p>Now if we look at the Parquet files on S3, we can see that:</p>
-<ol>
-<li>The old partition has a new Parquet file with the record removed</li>
-<li>There is a new partition with the single record</li>
-</ol>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">aws s3 ls s3://&lt;BUCKET&gt;/tmp/myhudidataset_001/
-
-2021-09-23 11:45:23     <span style="color:#ae81ff">434901</span> tmp/myhudidataset_001/2015-01-01/cd4b4b74-13f7-4c1e-a7ce-110bba8e16fd-0_0-404-90423_20210923184511.parquet
-2021-09-23 11:45:44     <span style="color:#ae81ff">434864</span> tmp/myhudidataset_001/2015-01-01/cd4b4b74-13f7-4c1e-a7ce-110bba8e16fd-0_0-442-103950_20210923184526.parquet
-2021-09-23 11:45:23     <span style="color:#ae81ff">434863</span> tmp/myhudidataset_001/2015-01-02/578ea02b-09f0-4952-afe5-94d44d158d29-0_1-404-90424_20210923184511.parquet
-2021-09-23 11:45:43     <span style="color:#ae81ff">434895</span> tmp/myhudidataset_001/2021-09-22/d67c9b50-1034-44b2-8ec9-2f3b1dcbf26c-0_1-442-103951_20210923184526.parquet
-</code></pre></div><h3 id="athena-compatibility">Athena Compatibility</h3>
-<p>We can also successfully query this dataset from Athena and see the updated data as well!</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#66d9ef">SELECT</span> <span style="color:#f92672">*</span> <span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">&#34;default&#34;</span>.<span style="color:#e6db74">&#34;my_hudi_table&#34;</span> 
-</code></pre></div><p><img loading="lazy" src="athena-results.png" alt="Athena Results"  />
-</p>
-<p><em>Note the the different <code>_hoodie_file_name</code> for record id <code>100</code>.</em></p>
-<p>Awesome! Now that I understand what&rsquo;s going on, it makes perfect sense. 🙌</p>
 ]]></content:encoded></item></channel></rss>
