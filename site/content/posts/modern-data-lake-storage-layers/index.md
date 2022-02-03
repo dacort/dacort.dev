@@ -19,13 +19,13 @@ In recent years we've seen a rise in new storage layers for data lakes. In 2017,
 
 This post aims to introduce each of these engines and give some insight into how they function under the hood and some of the differences in each. While I'll summarize the findings here, you can also view my Jupyter notebooks for each in my [modern-data-lake-storage-layers](https://github.com/dacort/modern-data-lake-storage-layers/tree/main/notebooks) repository. We begin with basic operations of writing and updating datasets.
 
-One thing to note about all of these frameworks is that each began with a different challenge they were solving for, but over time they have begun to converge on a common set of functionality.
+One thing to note about all of these frameworks is that each began with a different challenge they were solving for, but over time they have begun to converge on a common set of functionality. I should **also** note that I am learning about these frameworks as well - the comments here are neither authoritative or comprehensive. 🤗
 
 ## Apache Hudi
 
 > 📹 [Intro to Apache Hudi video](https://www.youtube.com/watch?v=fryfx0Zg7KA&t=323s)
 
-Apache Hudi (Hadoop Upsert Delete and Incremental) was originally designed as an incremental stream processing framework and was built to combine the benefits of stream and batch processing. Hudi can be used with Spark, Flink, Presto, Trino and Hive, but much of the original work was focused around Spark and that's what I use for these examples.
+Apache Hudi (Hadoop Upsert Delete and Incremental) was originally designed as an incremental stream processing framework and was built to combine the benefits of stream and batch processing. Hudi can be used with Spark, Flink, Presto, Trino and Hive, but much of the original work was focused around Spark and that's what I use for these examples. One of the other huge benefits of Hudi is the concept of a self-managed data layer. For example, Hudi can automatically perform [asynchronous compaction](https://hudi.apache.org/docs/compaction) to optimize data lakes and also supports [multi-writer gaurantees](https://hudi.apache.org/docs/concurrency_control). Hudi also offers flexibility in storage formats depending on read/write requirements and data size.
 
 For Hudi, we create a simple Spark DataFrame partitioned by `creation_date` and write that to S3.
 
@@ -170,7 +170,7 @@ snapshotQueryDF.show(truncate=False)
 +---+-------------+------------------------------------------------------------------------------------------------------------------------------+
 ```
 
-One other thing to note is that Hudi adds quite a bit of metadata to your Parquet files. If we use native Spark to read one of the Parquet files and show it, we see that there's various `_hoodie`-prefixed keys.
+One other thing to note is that Hudi adds quite a bit of metadata to your Parquet files. This data helps enable record-level change streams - more detail can be found in this [comprehensive blog post about the Hudi platform](https://hudi.apache.org/blog/2021/07/21/streaming-data-lake-platform/#writers). If we use native Spark to read one of the Parquet files and show it, we see that there's various `_hoodie`-prefixed keys.
 
 ```python
 from pyspark.sql.functions import split
@@ -269,7 +269,7 @@ There are a lot of moving pieces here, but the image from the Iceberg spec illus
 Similar to Hudi, our data is written to Parquet files in each partition, although Hive-style partitioning is used by default. Hudi can also do this by setting the [`hoodie.datasource.write.hive_style_partitioning
 `](https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritehive_style_partitioning) parameter.
 
-Different from Hudi, though, is the usage of the data catalog to identify the current metadata file to use. That metadata file contains references to a list of manifest files to use to determine which data files compose the dataset for that particular version, also known as snapshots. The snapshot data also has quite a bit of additional informaiton. Let's update our dataset then take a look at S3 again and the snapshot portion of the metadata file.
+Different from Hudi, though, is the default usage of the data catalog to identify the current metadata file to use. That metadata file contains references to a list of manifest files to use to determine which data files compose the dataset for that particular version, also known as snapshots. As of [Hudi 0.7.0](https://hudi.apache.org/releases/release-0.7.0/#metadata-table), it also supports a metadata table to reduce the performance impact of file listings. The snapshot data also has quite a bit of additional information. Let's update our dataset then take a look at S3 again and the snapshot portion of the metadata file.
 
 ```python
 spark.sql(f"UPDATE {ICEBERG_TABLE_NAME} SET creation_date = '2022-01-11' WHERE id = 100")
