@@ -1,4 +1,218 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Posts on Damon Cortesi</title><link>https://dacort.dev/posts/</link><description>Recent content in Posts on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 02 Feb 2022 14:22:22 -0800</lastBuildDate><atom:link href="https://dacort.dev/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.dev/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.dev/posts/modern-data-lake-storage-layers/</guid><description>In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, Uber announced Hudi - an incremental processing framework for data pipelines. In 2018, Netflix introduced Iceberg - a new table format for managing extremely large cloud datasets. And in 2019, Databricks open-sourced Delta Lake - originally intended to bring ACID transactions to data lakes.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Posts on Damon Cortesi</title><link>https://dacort.dev/posts/</link><description>Recent content in Posts on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 04 Feb 2022 10:30:00 -0800</lastBuildDate><atom:link href="https://dacort.dev/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>"Serverless" Analytics of Twitter Data with MSK Connect and Athena</title><link>https://dacort.dev/posts/serverless-analytics-of-twitter-data/</link><pubDate>Fri, 04 Feb 2022 10:30:00 -0800</pubDate><guid>https://dacort.dev/posts/serverless-analytics-of-twitter-data/</guid><description>Like many, I was recently drawn in to a simple word game by the name of &amp;ldquo;Wordle&amp;rdquo;. Also, like many I wanted to dive into the analytics of all the yellow, green, and white-or-black-depending-on-your-dark-mode blocks. While you can easily query tweet volume using the Twitter API, I wanted to dig deeper. And the tweets were growing&amp;hellip;
+Given the recent announcement of MSK Connect, I wanted to see if I could easily consume the Twitter Stream into S3 and query the data with Athena.</description><content:encoded><![CDATA[<p>Like many, <a href="https://twitter.com/dacort/status/1466940658271199233?s=20&amp;t=cEoyLkoJSazoAHW9XRhjvw">I was recently</a> drawn in to a simple word game by the name of &ldquo;Wordle&rdquo;. Also, like many I wanted to dive into the analytics of all the yellow, green, and white-or-black-depending-on-your-dark-mode blocks. While you can easily <a href="https://www.tweetstats.com/">query tweet volume</a> using the Twitter API, I wanted to dig deeper. And the tweets were growing&hellip;</p>
+<p><img loading="lazy" src="wordle_counts_2021-01-13.png" alt=""  />
+</p>
+<p>Given the recent announcement of <a href="https://aws.amazon.com/blogs/aws/introducing-amazon-msk-connect-stream-data-to-and-from-your-apache-kafka-clusters-using-managed-connectors/">MSK Connect</a>, I wanted to see if I could easily consume the Twitter Stream into S3 and query the data with Athena. So I looked around a bit and found this <a href="https://github.com/jcustenborder/kafka-connect-twitter">kafka-connect-twitter</a> GitHub repo and this <a href="https://www.confluent.io/blog/using-ksql-to-analyse-query-and-transform-data-in-kafka/">great blog post from Confluent</a> on analyzing Twitter data using that connector. So&hellip;off to the AWS console!</p>
+<p>I&rsquo;ll walk through the steps of creating everything below, but I did create a CloudFormation template in my <a href="https://github.com/dacort/serverless-twitter-analytics.git">serverless-twitter-analytics</a> repository that creates everything you need except for building the connector artifacts and creating the connectors in MSK.</p>
+<h2 id="setting-up-amazon-msk">Setting up Amazon MSK</h2>
+<p>First we need an MSK cluster. (<em>I was hoping to use the MSK Serverless preview, but alas MSK Connect isn&rsquo;t supported with it.</em>) This is pretty easy to do in the <a href="https://console.aws.amazon.com/msk/home#/clusters">MSK Console</a> - just click the &ldquo;Create cluster&rdquo; button and use the &ldquo;Quick create&rdquo; option.</p>
+<p>ℹ️ <strong>One very important thing to note here</strong> – The cluster <em>must</em> be created with private subnets and the VPC should have a public subnet with a public NAT Gateway. You may need to use the &ldquo;Custom create&rdquo; option here if the default subnets aren&rsquo;t private.</p>
+<p>I used the default Kafka version of 2.6.2 and left all other defaults.</p>
+<h2 id="setting-up-amazon-msk-connect">Setting up Amazon MSK Connect</h2>
+<p>We&rsquo;re going to use two connectors:</p>
+<ul>
+<li>One producer to stream data from the Twitter API into Kafka</li>
+<li>One consumer to read data from Kafka and write it out into partioned JSON files in S3</li>
+</ul>
+<p>This was probably the trickiest part, for a couple reasons solely related to my environment and lack of experience with Kafka:</p>
+<ul>
+<li>The <a href="https://github.com/jcustenborder/kafka-connect-twitter">kafka-connect-twitter</a> connector didn&rsquo;t want to compile locally</li>
+<li>I had to figure out the proper connector configuration to write the data to S3 in my desired JSON format</li>
+</ul>
+<h3 id="build-the-twitter-connector">Build the Twitter connector</h3>
+<p>To address #1, I used a <a href="https://github.com/dacort/serverless-twitter-analytics/blob/main/Dockerfile">Dockerfile</a> to download/build the Twitter connector.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-docker" data-lang="docker"><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> openjdk:8 AS build-stage</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> apt-get update <span style="color:#f92672">&amp;&amp;</span> apt-get install -y <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    maven <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    zip<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">WORKDIR</span><span style="color:#e6db74"> /usr/src/ktwit</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://github.com/jcustenborder/kafka-connect-twitter/archive/refs/tags/0.3.34.tar.gz /usr/src/ktwit/<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> tar xzf 0.3.34.tar.gz <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    cd kafka-connect-twitter-0.3.34 <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    mvn clean package<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> tar xzf kafka-connect-twitter-0.3.34/target/kafka-connect-twitter-0.3-SNAPSHOT.tar.gz <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>    zip -rj kafka-connect-twitter-0.3.34.zip usr/share/kafka-connect/kafka-connect-twitter/<span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> scratch AS export-stage</span><span style="color:#960050;background-color:#1e0010">
+</span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> --from<span style="color:#f92672">=</span>build-stage /usr/src/ktwit/*.zip /<span style="color:#960050;background-color:#1e0010">
+</span></code></pre></div><p>MSK plugins must be be a zip file, so the last steps in the Dockerfile also decompress the <code>.tar.gz</code> with the built jar and its dependencies and repackage them into a zip file. I use the following command to build and copy the zip file to my local filesystem.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">docker build --output . .
+</code></pre></div><p>You should have a <code>kafka-connect-twitter-0.3.34.zip</code> locally - go ahead and upload that to S3.</p>
+<p>For the S3 connector, you can download a pre-built zip file from the <a href="https://www.confluent.io/hub/confluentinc/kafka-connect-s3">Confluent Amazon S3 Sink Connector</a>. Download that and upload it to S3 as well.</p>
+<h3 id="create-the-msk-connect-connectors">Create the MSK Connect connectors</h3>
+<h4 id="twitter-connector">Twitter connector</h4>
+<p>First you create a custom plugin. Go to the &ldquo;Custom plugins&rdquo; section under &ldquo;MSK Connect&rdquo; and then just click the &ldquo;Create custom plugin&rdquo; button. Provide the path to your <code>kafka-connect-twitter-0.3.34.zip</code> file in S3 and you&rsquo;re done.</p>
+<p>Next, in the Connectors section click &ldquo;Create connector&rdquo;. Select &ldquo;Use existing custom plugin&rdquo; and select the plugin you just created. In the next section, give it a name (I chose <code>twitter-search-wordle</code>) and select the MSK cluster you created previously. For the Connector configuration, here&rsquo;s what I used below – you&rsquo;ll need to replace the <code>twitter.oauth</code> variables with your own credentials and set <code>filter.keywords</code> to the keywords you want to track.</p>
+<p>This configuration will automatically create a <code>twitter_json</code> topic in your Kafka cluster.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ini" data-lang="ini"><span style="color:#a6e22e">connector.class</span><span style="color:#f92672">=</span><span style="color:#e6db74">com.github.jcustenborder.kafka.connect.twitter.TwitterSourceConnector</span>
+<span style="color:#a6e22e">tasks.max</span><span style="color:#f92672">=</span><span style="color:#e6db74">1</span>
+<span style="color:#a6e22e">twitter.http.connectionTimeout</span><span style="color:#f92672">=</span><span style="color:#e6db74">120000</span>
+<span style="color:#a6e22e">twitter.oauth.consumerKey</span><span style="color:#f92672">=</span><span style="color:#e6db74">&lt;TWITTER_CONSUMER_KEY&gt;</span>
+<span style="color:#a6e22e">twitter.oauth.consumerSecret</span><span style="color:#f92672">=</span><span style="color:#e6db74">&lt;TWITTER_CONSUMER_SECRET&gt;</span>
+<span style="color:#a6e22e">twitter.oauth.accessToken</span><span style="color:#f92672">=</span><span style="color:#e6db74">&lt;TWITTER_ACCESS_TOKEN&gt;</span>
+<span style="color:#a6e22e">twitter.oauth.accessTokenSecret</span><span style="color:#f92672">=</span><span style="color:#e6db74">&lt;TWITTER_ACCESS_TOKEN_SECRET&gt;</span>
+<span style="color:#a6e22e">twitter.debug</span><span style="color:#f92672">=</span><span style="color:#e6db74">true</span>
+<span style="color:#a6e22e">process.deletes</span><span style="color:#f92672">=</span><span style="color:#e6db74">true</span>
+<span style="color:#a6e22e">filter.keywords</span><span style="color:#f92672">=</span><span style="color:#e6db74">wordle</span>
+<span style="color:#a6e22e">kafka.status.topic</span><span style="color:#f92672">=</span><span style="color:#e6db74">twitter_json</span>
+<span style="color:#a6e22e">kafka.delete.topic</span><span style="color:#f92672">=</span><span style="color:#e6db74">twitter_deletes_json_02</span>
+<span style="color:#a6e22e">twitter.http.prettyDebug</span><span style="color:#f92672">=</span><span style="color:#e6db74">true</span>
+<span style="color:#a6e22e">topic.creation.enable</span><span style="color:#f92672">=</span><span style="color:#e6db74">true</span>
+<span style="color:#a6e22e">topic.creation.default.partitions</span><span style="color:#f92672">=</span><span style="color:#e6db74">4</span>
+<span style="color:#a6e22e">topic.creation.default.replication.factor</span><span style="color:#f92672">=</span><span style="color:#e6db74">2</span>
+<span style="color:#a6e22e">key.converter</span><span style="color:#f92672">=</span><span style="color:#e6db74">org.apache.kafka.connect.json.JsonConverter</span>
+<span style="color:#a6e22e">key.converter.schemas.enable</span><span style="color:#f92672">=</span><span style="color:#e6db74">false</span>
+<span style="color:#a6e22e">value.converter</span><span style="color:#f92672">=</span><span style="color:#e6db74">org.apache.kafka.connect.json.JsonConverter</span>
+<span style="color:#a6e22e">value.converter.schemas.enable</span><span style="color:#f92672">=</span><span style="color:#e6db74">false</span>
+</code></pre></div><p>You&rsquo;ll also need to create an IAM service role for your connectors. You can find the cluster ARN in the console on your cluster summary page. I use the policy below for both my Twitter and S3 connectors.</p>
+<details>
+  <summary>Example IAM policy</summary>
+  <div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+    <span style="color:#f92672">&#34;Version&#34;</span>: <span style="color:#e6db74">&#34;2012-10-17&#34;</span>,
+    <span style="color:#f92672">&#34;Statement&#34;</span>: [
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;kafka-cluster:Connect&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:DescribeCluster&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: [
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:cluster/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;&#34;</span>
+            ]
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;kafka-cluster:ReadData&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:DescribeTopic&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: [
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:cluster/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/*&#34;</span>,
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:topic/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/*&#34;</span>
+            ]
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;kafka-cluster:WriteData&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:DescribeTopic&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: [
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:cluster/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/*&#34;</span>,
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:topic/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/*&#34;</span>
+            ]
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;kafka-cluster:CreateTopic&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:WriteData&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:ReadData&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:DescribeTopic&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: [
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:topic/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/__amazon_msk_connect_*&#34;</span>,
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:topic/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/*&#34;</span>
+            ]
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;kafka-cluster:AlterGroup&#34;</span>,
+                <span style="color:#e6db74">&#34;kafka-cluster:DescribeGroup&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: [
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:group/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/__amazon_msk_connect_*&#34;</span>,
+                <span style="color:#e6db74">&#34;arn:aws:kafka:&lt;region&gt;:&lt;account_id&gt;:group/&lt;cluster_name&gt;/&lt;cluster_uuid&gt;/connect-*&#34;</span>
+            ]
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;s3:ListAllMyBuckets&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: <span style="color:#e6db74">&#34;arn:aws:s3:::*&#34;</span>
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;s3:ListBucket&#34;</span>,
+                <span style="color:#e6db74">&#34;s3:GetBucketLocation&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: <span style="color:#e6db74">&#34;arn:aws:s3:::s3-bucket-name&#34;</span>
+        },
+        {
+            <span style="color:#f92672">&#34;Effect&#34;</span>: <span style="color:#e6db74">&#34;Allow&#34;</span>,
+            <span style="color:#f92672">&#34;Action&#34;</span>: [
+                <span style="color:#e6db74">&#34;s3:PutObject&#34;</span>,
+                <span style="color:#e6db74">&#34;s3:GetObject&#34;</span>,
+                <span style="color:#e6db74">&#34;s3:AbortMultipartUpload&#34;</span>,
+                <span style="color:#e6db74">&#34;s3:ListMultipartUploadParts&#34;</span>,
+                <span style="color:#e6db74">&#34;s3:ListBucketMultipartUploads&#34;</span>
+            ],
+            <span style="color:#f92672">&#34;Resource&#34;</span>: <span style="color:#e6db74">&#34;arn:aws:s3:::s3-bucket-name/*&#34;</span>
+        }
+    ]
+}
+</code></pre></div>
+</details>
+
+<h4 id="s3-connector">S3 connector</h4>
+<p>Now we create another custom plugin for S3 and then a connector using that plugin. All the options are the same as the above, but we provide this connector configuration. You&rsquo;ll need to update the <code>s3.region</code> and <code>s3.bucket.name</code> keys with your specific values.</p>
+<p>By default, this configuration will output line-based JSON files partitioned by year-month-day-hour (<code>path.format</code>) and flush data to S3 every 1,000 records (<code>flush.size</code>). The <code>ByteArrayFormat</code> is used so the data gets written to S3 in raw JSON format (per <a href="https://stackoverflow.com/q/68223215/5141922">https://stackoverflow.com/q/68223215/5141922</a>). Per the <a href="https://docs.confluent.io/kafka-connect-s3-sink/current/overview.html#s3-object-uploads">Kafka Connect S3 docs</a>, I also configured &ldquo;scheduled rotation&rdquo; on the sink so that data will be flushed to S3 on a regular basis.</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-ini" data-lang="ini"><span style="color:#a6e22e">connector.class</span><span style="color:#f92672">=</span><span style="color:#e6db74">io.confluent.connect.s3.S3SinkConnector</span>
+<span style="color:#a6e22e">s3.bucket.name</span><span style="color:#f92672">=</span><span style="color:#e6db74">&lt;S3_BUCKET_NAME&gt;</span>
+<span style="color:#a6e22e">s3.region</span><span style="color:#f92672">=</span><span style="color:#e6db74">&lt;S3_BUCKET_REGION&gt;</span>
+<span style="color:#a6e22e">flush.size</span><span style="color:#f92672">=</span><span style="color:#e6db74">1000</span>
+<span style="color:#a6e22e">format.bytearray.extension</span><span style="color:#f92672">=</span><span style="color:#e6db74">.json</span>
+<span style="color:#a6e22e">format.class</span><span style="color:#f92672">=</span><span style="color:#e6db74">io.confluent.connect.s3.format.bytearray.ByteArrayFormat</span>
+<span style="color:#a6e22e">locale</span><span style="color:#f92672">=</span><span style="color:#e6db74">en-US</span>
+<span style="color:#a6e22e">partition.duration.ms</span><span style="color:#f92672">=</span><span style="color:#e6db74">600000</span>
+<span style="color:#a6e22e">partitioner.class</span><span style="color:#f92672">=</span><span style="color:#e6db74">io.confluent.connect.storage.partitioner.TimeBasedPartitioner</span>
+<span style="color:#a6e22e">path.format</span><span style="color:#f92672">=</span><span style="color:#e6db74">&#39;year&#39;=YYYY/&#39;month&#39;=MM/&#39;day&#39;=dd/&#39;hour&#39;=HH</span>
+<span style="color:#a6e22e">rotate.schedule.interval.ms</span><span style="color:#f92672">=</span><span style="color:#e6db74">300000</span>
+<span style="color:#a6e22e">s3.compression.type</span><span style="color:#f92672">=</span><span style="color:#e6db74">gzip</span>
+<span style="color:#a6e22e">schema.compatibility</span><span style="color:#f92672">=</span><span style="color:#e6db74">NONE</span>
+<span style="color:#a6e22e">storage.class</span><span style="color:#f92672">=</span><span style="color:#e6db74">io.confluent.connect.s3.storage.S3Storage</span>
+<span style="color:#a6e22e">tasks.max</span><span style="color:#f92672">=</span><span style="color:#e6db74">2</span>
+<span style="color:#a6e22e">timezone</span><span style="color:#f92672">=</span><span style="color:#e6db74">UTC</span>
+<span style="color:#a6e22e">topics.dir</span><span style="color:#f92672">=</span><span style="color:#e6db74">wordle_data/json</span>
+<span style="color:#a6e22e">topics</span><span style="color:#f92672">=</span><span style="color:#e6db74">twitter_json_02,twitter_deletes_json_02</span>
+<span style="color:#a6e22e">value.converter</span><span style="color:#f92672">=</span><span style="color:#e6db74">org.apache.kafka.connect.converters.ByteArrayConverter</span>
+</code></pre></div><p>The tricky part here was figuring out the right combination of format classes and key/value converters. My initial attempts had Java Structs getting written out to S3 and then escaped JSON, but I finally found the right combination of <code>JsonConverter</code> for the producer and <code>ByteArrayFormat</code> for the consumer. I wanted JSON so I could easily consume the data in Athena!</p>
+<h2 id="setting-up-amazon-athena">Setting up Amazon Athena</h2>
+<p>With the configuration above, you should now have gzip&rsquo;ed JSON Twitter data streaming into your S3 bucket!</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">➜ aws s3 ls s3://<span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span>/wordle_data/json/ --recursive | head
+2022-01-10 16:23:33     <span style="color:#ae81ff">346352</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000000000.json.gz
+2022-01-10 16:23:34     <span style="color:#ae81ff">346449</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000001000.json.gz
+2022-01-10 16:23:35     <span style="color:#ae81ff">329079</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000002000.json.gz
+2022-01-10 16:25:01     <span style="color:#ae81ff">163478</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000003000.json.gz
+2022-01-10 16:30:01      <span style="color:#ae81ff">58634</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000003505.json.gz
+2022-01-10 16:35:01      <span style="color:#ae81ff">55148</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000003681.json.gz
+</code></pre></div><p>Next, we&rsquo;ll set up a <a href="https://console.aws.amazon.com/glue/home#catalog:tab=crawlers">Glue Crawler</a> to create our data catalog table and keep the partitions up-to-date.</p>
+<p>When creating the crawler, point it to the S3 bucket and prefix you configured above (<code>s3://&lt;BUCKET_NAME&gt;/wordle_data/json/</code>). I also configured it to &ldquo;Crawl new folders only&rdquo; and run at 6 minutes after the hour (<code>06 0/1 * * ? *</code>). Since I configured the S3 sink connector to rate files every 5 minute, this ensures that every run should pick up the new partition as quick as possible. Here&rsquo;s a screenshot of my final configuration:</p>
+<p><img loading="lazy" src="glue_crawler_config.png" alt=""  />
+</p>
+<p>You may want to run your crawler manually the first time, but once you do you should see a new table show up in your data catalog! And you should be able to immediately query the data in Athena! (<em>If you haven&rsquo;t setup Athena yet, you&rsquo;ll need to create a bucket for results.</em>)</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-sql" data-lang="sql"><span style="color:#66d9ef">SELECT</span> createdat, text,
+    regexp_extract(text, <span style="color:#e6db74">&#39;Wordle (\d+) (\d)/6&#39;</span>, <span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">AS</span> wordle_index,
+    regexp_extract(text, <span style="color:#e6db74">&#39;Wordle (\d+) (\d)/6&#39;</span>, <span style="color:#ae81ff">2</span>) <span style="color:#66d9ef">AS</span> num_tries,
+    regexp_extract_all(
+        regexp_replace(text, <span style="color:#e6db74">&#39;\u2B1C&#39;</span>, <span style="color:#e6db74">&#39;⬛&#39;</span>),
+        <span style="color:#e6db74">&#39;(\u2B1C|\u2B1B|\x{1F7E9}|\x{1F7E8})+&#39;</span>
+    ) <span style="color:#66d9ef">AS</span> guess_blocks
+<span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">&#34;AwsDataCatalog&#34;</span>.<span style="color:#e6db74">&#34;default&#34;</span>.<span style="color:#e6db74">&#34;wordle_json&#34;</span>
+<span style="color:#66d9ef">WHERE</span> retweet<span style="color:#f92672">=</span><span style="color:#66d9ef">false</span>
+    <span style="color:#66d9ef">AND</span> <span style="color:#66d9ef">CAST</span>(regexp_extract(text, <span style="color:#e6db74">&#39;Wordle (\d+) (\d)/6&#39;</span>, <span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">as</span> int) <span style="color:#66d9ef">BETWEEN</span> <span style="color:#ae81ff">100</span> <span style="color:#66d9ef">AND</span> <span style="color:#ae81ff">300</span>
+<span style="color:#66d9ef">limit</span> <span style="color:#ae81ff">10</span>;
+</code></pre></div><p><img loading="lazy" src="athena_query.png" alt=""  />
+</p>
+<p>And that&rsquo;s it! Now you can query to your heart&rsquo;s content. :) <em>Note that <code>SELECT *</code> won&rsquo;t work due to some of the nested fields not being defined properly.</em></p>
+]]></content:encoded></item><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.dev/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.dev/posts/modern-data-lake-storage-layers/</guid><description>In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, Uber announced Hudi - an incremental processing framework for data pipelines. In 2018, Netflix introduced Iceberg - a new table format for managing extremely large cloud datasets. And in 2019, Databricks open-sourced Delta Lake - originally intended to bring ACID transactions to data lakes.
 📹 If you&amp;rsquo;d like to watch a video that discusses the content of this post, I&amp;rsquo;ve also recorded an overview here.</description><content:encoded><![CDATA[<p>In recent years we&rsquo;ve seen a rise in new storage layers for data lakes. In 2017, <a href="https://eng.uber.com/hoodie/">Uber announced Hudi</a> - an incremental processing framework for data pipelines. In 2018, <a href="https://conferences.oreilly.com/strata/strata-ny-2018/public/schedule/detail/69503.html">Netflix introduced Iceberg</a> - a new table format for managing extremely large cloud datasets. And in 2019, <a href="https://techcrunch.com/2019/04/24/databricks-open-sources-delta-lake-to-make-data-lakes-more-reliable/">Databricks open-sourced Delta Lake</a> - originally intended to bring ACID transactions to data lakes.</p>
 <blockquote>
 <p>📹 <em>If you&rsquo;d like to watch a video that discusses the content of this post, I&rsquo;ve also recorded <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA">an overview here</a>. Each relevant section below will also link to individual timestamps.</em></p>
