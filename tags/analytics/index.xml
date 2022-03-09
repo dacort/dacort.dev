@@ -12,7 +12,7 @@ Given the recent announcement of MSK Connect, I wanted to see if I could easily 
 <p>We&rsquo;re going to use two connectors:</p>
 <ul>
 <li>One producer to stream data from the Twitter API into Kafka</li>
-<li>One consumer to read data from Kafka and write it out into partioned JSON files in S3</li>
+<li>One consumer to read data from Kafka and write it out into partitioned JSON files in S3</li>
 </ul>
 <p>This was probably the trickiest part, for a couple reasons solely related to my environment and lack of experience with Kafka:</p>
 <ul>
