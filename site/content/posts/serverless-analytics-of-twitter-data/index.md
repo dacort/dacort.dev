@@ -33,7 +33,7 @@ I used the default Kafka version of 2.6.2 and left all other defaults.
 
 We're going to use two connectors:
 - One producer to stream data from the Twitter API into Kafka
-- One consumer to read data from Kafka and write it out into partioned JSON files in S3
+- One consumer to read data from Kafka and write it out into partitioned JSON files in S3
 
 This was probably the trickiest part, for a couple reasons solely related to my environment and lack of experience with Kafka:
 - The [kafka-connect-twitter](https://github.com/jcustenborder/kafka-connect-twitter) connector didn't want to compile locally
