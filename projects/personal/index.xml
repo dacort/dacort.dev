@@ -30,6 +30,7 @@ brew install bingdaily
 <blockquote class="twitter-tweet"><p lang="en" dir="ltr">Perhaps a silly question, but does anybody have an ETL framework where they just spin up docker containers with different params? <a href="https://t.co/rvDRVTD3gY">pic.twitter.com/rvDRVTD3gY</a></p>&mdash; Damon Cortesi (@dacort) <a href="https://twitter.com/dacort/status/1359638593812140032?ref_src=twsrc%5Etfw">February 10, 2021</a></blockquote>
 <script async src="https://platform.twitter.com/widgets.js" charset="utf-8"></script>
 
+
 <p>I&rsquo;m often hopping around to different APIs and only want a slice of data. And I get frustrated with having to:</p>
 <ul>
 <li>Find the right API client</li>
