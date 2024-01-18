@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>jupyter on Damon Cortesi</title><link>https://dacort.dev/tags/jupyter/</link><description>Recent content in jupyter on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 14 Jul 2021 16:00:00 -0700</lastBuildDate><atom:link href="https://dacort.dev/tags/jupyter/index.xml" rel="self" type="application/rss+xml"/><item><title>Continuous Deployment of Jupyter Notebooks</title><link>https://dacort.dev/posts/continuous-deployment-of-jupyter-notebooks/</link><pubDate>Wed, 14 Jul 2021 16:00:00 -0700</pubDate><guid>https://dacort.dev/posts/continuous-deployment-of-jupyter-notebooks/</guid><description>This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>jupyter on Damon Cortesi</title><link>https://dacort.dev/tags/jupyter/</link><description>Recent content in jupyter on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Wed, 14 Jul 2021 16:00:00 -0700</lastBuildDate><atom:link href="https://dacort.dev/tags/jupyter/index.xml" rel="self" type="application/rss+xml"/><item><title>Continuous Deployment of Jupyter Notebooks</title><link>https://dacort.dev/posts/continuous-deployment-of-jupyter-notebooks/</link><pubDate>Wed, 14 Jul 2021 16:00:00 -0700</pubDate><guid>https://dacort.dev/posts/continuous-deployment-of-jupyter-notebooks/</guid><description>This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.
 Overview Since I started using EMR Studio, I&amp;rsquo;ve been making more use of Jupyter notebooks as scratch pads and often want to be able to easily share the results of my research. I hunted around for a few different solutions and while there are some good ones like nbconvert and jupytext, I wanted something a bit simpler and off-the-shelf.</description><content:encoded><![CDATA[<p>This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.</p>
 <h2 id="overview">Overview</h2>
 <p>Since I started using <a href="https://aws.amazon.com/emr/features/studio/">EMR Studio</a>, I&rsquo;ve been making more use of Jupyter notebooks as scratch pads and often want to be able to easily share the results of my research. I hunted around for a few different solutions and while there are some good ones like <a href="https://nbconvert.readthedocs.io/en/latest/">nbconvert</a> and <a href="https://github.com/mwouts/jupytext/">jupytext</a>, I wanted something a bit simpler and off-the-shelf. This post from <a href="https://www.linkedin.com/in/mikkelhartmann/">Mikkel Hartmann</a> about <a href="http://mikkelhartmann.dk/2019/05/14/static-website-from-jupyter-notebooks.html">making a static website from Jupyter Notebooks</a> led me to <a href="https://www.mkdocs.org/">MkDocs</a> and luckily, I came across <a href="https://github.com/greenape/mknotebooks">mknotebooks</a>, which offers a simple plugin for MkDocs. 😅</p>
@@ -21,46 +21,46 @@ Overview Since I started using EMR Studio, I&amp;rsquo;ve been making more use o
 <h3 id="pre-requisites">Pre-requisites</h3>
 <p>You&rsquo;ll need to have <a href="https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html#getting_started_prerequisites">CDK installed</a> (&gt;= v1.107.0) and Python &gt;= 3.9.</p>
 <p>I use <a href="https://github.com/nodenv/nodenv">nodenv</a> and <a href="https://virtualenv.pypa.io/en/latest/">virtualenv</a> for my respective environments.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell"><span style="color:#75715e"># I use node 14.5.0</span>
-nodenv shell 14.5.0
-
-<span style="color:#75715e"># And Python3</span>
-virtualenv -p python3.8 .venv
-source .venv/bin/activate
-</code></pre></div><h3 id="bootstrapping">Bootstrapping</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#75715e"># I use node 14.5.0</span>
+</span></span><span style="display:flex;"><span>nodenv shell 14.5.0
+</span></span><span style="display:flex;"><span>
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># And Python3</span>
+</span></span><span style="display:flex;"><span>virtualenv -p python3.8 .venv
+</span></span><span style="display:flex;"><span>source .venv/bin/activate
+</span></span></code></pre></div><h3 id="bootstrapping">Bootstrapping</h3>
 <p>The source code is available in <a href="https://github.com/dacort/jupyter-static-website">dacort/jupyter-static-website</a>. In order to get started, we just need to clone that repo and deploy our CDK stack!</p>
 <p>This project is a two-phased deploy due to the fact that CloudFront certificates need to be in <code>us-east-1</code>. If you <em>do not</em> need a custom domain, you can skip the first part.</p>
 <p>First, clone the project and install the necessary requirements.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">git clone https://github.com/dacort/jupyter-static-website.git
-cd jupyter-static-website
-pip install -r requirements.txt
-</code></pre></div><p>You&rsquo;ll also need to <a href="https://docs.aws.amazon.com/cdk/latest/guide/bootstrapping.html">bootstrap</a> your AWS CDK environment in the account and region you want to deploy Part 2 in.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">cdk bootstrap aws://ACCOUNT-NUMBER-1/REGION-1
-</code></pre></div><h3 id="part-1---cloudfront-certificate">Part 1 - CloudFront Certificate</h3>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>git clone https://github.com/dacort/jupyter-static-website.git
+</span></span><span style="display:flex;"><span>cd jupyter-static-website
+</span></span><span style="display:flex;"><span>pip install -r requirements.txt
+</span></span></code></pre></div><p>You&rsquo;ll also need to <a href="https://docs.aws.amazon.com/cdk/latest/guide/bootstrapping.html">bootstrap</a> your AWS CDK environment in the account and region you want to deploy Part 2 in.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>cdk bootstrap aws://ACCOUNT-NUMBER-1/REGION-1
+</span></span></code></pre></div><h3 id="part-1---cloudfront-certificate">Part 1 - CloudFront Certificate</h3>
 <p><em>If you are not using a custom domain, skip to Part 2</em></p>
 <p>This project only supports using the default CloudFront certificate and a DNS-validated CNAME. In order to generate the certificate, you&rsquo;ll need to run the command below, go into the <a href="https://console.aws.amazon.com/acm/home?region=us-east-1#/">AWS Certificate Manager console</a> and make sure you follow the validation instructions.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">cdk deploy CloudfrontCertificateStack -c domain_name<span style="color:#f92672">=</span>notebooks.example.com
-</code></pre></div><p>Once the domain is validated, the stack should finish provisioning.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>cdk deploy CloudfrontCertificateStack -c domain_name<span style="color:#f92672">=</span>notebooks.example.com
+</span></span></code></pre></div><p>Once the domain is validated, the stack should finish provisioning.</p>
 <p>One of the outputs from this stack will be <code>CloudfrontCertificateStack.certificatearn</code> - you&rsquo;ll need the value of this for the next phase.</p>
 <h3 id="part-2---jupyter-cd-pipeline">Part 2 - Jupyter CD Pipeline</h3>
 <p><em>If you are not using a custom domain, you can omit both of the <code>-c</code> options below.</em></p>
 <p>If you want to deploy to a different region, make sure you set the <code>AWS_DEFAULT_REGION</code> environment variable.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">cdk deploy EmrStudioPublisherStack <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>    -c domain_name<span style="color:#f92672">=</span>notebooks.example.com <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>    -c certificate_arn<span style="color:#f92672">=</span>arn:aws:acm:us-east-1:012345678912:certificate/f07b01a4-3e8c-4639-8a22-b7a20a832de3
-</code></pre></div><p>Once this stack finishes, you should have a CodeCommit repository you can make changes to, a CloudFront distribution, and a publicly accessible URL (found in the <code>EmrStudioPublisherStack.cloudfrontendpoint</code> output) that has a pre-populated example site.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>cdk deploy EmrStudioPublisherStack <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -c domain_name<span style="color:#f92672">=</span>notebooks.example.com <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -c certificate_arn<span style="color:#f92672">=</span>arn:aws:acm:us-east-1:012345678912:certificate/f07b01a4-3e8c-4639-8a22-b7a20a832de3
+</span></span></code></pre></div><p>Once this stack finishes, you should have a CodeCommit repository you can make changes to, a CloudFront distribution, and a publicly accessible URL (found in the <code>EmrStudioPublisherStack.cloudfrontendpoint</code> output) that has a pre-populated example site.</p>
 <p>The site will take a few minutes to deploy - you&rsquo;ll be able to keep an eye on the status in the <a href="https://console.aws.amazon.com/codesuite/codepipeline/pipelines">CodePipeline console</a>.</p>
 <h2 id="usage">Usage</h2>
 <p>Usage is pretty straight-forward. <code>git clone</code> the repository, add a new notebook, and push it back up! If you&rsquo;re using EMR Studio, you can add your CodeCommit repository and make your changes to your Jupyter notebooks there.</p>
 <p>I made a video about <a href="https://www.youtube.com/watch?v=ZdbUTxBjBIs">connecting to Git in EMR Studio</a> that you might find useful.</p>
 <p>Any new notebooks added in the <code>site/docs/notebooks/</code> directory will automatically be published.</p>
 <p>You can add links to the notebooks by updating the <code>nav</code> section of the <code>mkdocs.yml</code> file.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-yaml" data-lang="yaml"><span style="color:#f92672">nav</span>:
-  - <span style="color:#f92672">Home</span>: <span style="color:#ae81ff">index.md</span>
-  - <span style="color:#f92672">Notebooks</span>:
-    - <span style="color:#f92672">Oura Sleep Analysis</span>: <span style="color:#ae81ff">notebooks/damons_sleep.ipynb</span>
-    - <span style="color:#f92672">Intro to Data Processing on AWS</span>: <span style="color:#ae81ff">notebooks/intro_data_processing_aws.ipynb</span>
-</code></pre></div><p>This YAML config will generate a nav dropdown like so.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-yaml" data-lang="yaml"><span style="display:flex;"><span><span style="color:#f92672">nav</span>:
+</span></span><span style="display:flex;"><span>  - <span style="color:#f92672">Home</span>: <span style="color:#ae81ff">index.md</span>
+</span></span><span style="display:flex;"><span>  - <span style="color:#f92672">Notebooks</span>:
+</span></span><span style="display:flex;"><span>    - <span style="color:#f92672">Oura Sleep Analysis</span>: <span style="color:#ae81ff">notebooks/damons_sleep.ipynb</span>
+</span></span><span style="display:flex;"><span>    - <span style="color:#f92672">Intro to Data Processing on AWS</span>: <span style="color:#ae81ff">notebooks/intro_data_processing_aws.ipynb</span>
+</span></span></code></pre></div><p>This YAML config will generate a nav dropdown like so.</p>
 <p><img loading="lazy" src="nav_dropdown.png" alt="Navigation example"  />
 </p>
 <h3 id="advanced-usage">Advanced Usage</h3>

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>airflow on Damon Cortesi</title><link>https://dacort.dev/tags/airflow/</link><description>Recent content in airflow on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.dev/tags/airflow/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.dev/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.dev/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>airflow on Damon Cortesi</title><link>https://dacort.dev/tags/airflow/</link><description>Recent content in airflow on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.dev/tags/airflow/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.dev/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.dev/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.
 Overview Before you get started, it&amp;rsquo;s good to have an understanding of the different components of an Airflow task.</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
 <p><img loading="lazy" src="cloc.png" alt=""  />
 </p>
@@ -42,10 +42,10 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <p>In any case, you <em>should</em> be able to just type <code>./breeze</code> and be dropped into an Airflow shell after it builds a local version of the necessary Docker images.</p>
 <h3 id="unit-tests">Unit tests</h3>
 <p>Once in the Airflow shell, you should be able to run any of your unit tests.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">python -m pytest tests/providers/amazon/aws/operators/test_emr_containers.py
-</code></pre></div><p>If you want, you can also run your tests with the <code>./breeze</code> CLI.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./breeze tests tests/providers/amazon/aws/sensors/test_emr_containers.py tests/providers/amazon/aws/operators/test_emr_containers.py tests/providers/amazon/aws/hooks/test_emr_containers.py
-</code></pre></div><p>Now, let&rsquo;s make sure we have an example DAG to run.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>python -m pytest tests/providers/amazon/aws/operators/test_emr_containers.py
+</span></span></code></pre></div><p>If you want, you can also run your tests with the <code>./breeze</code> CLI.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>./breeze tests tests/providers/amazon/aws/sensors/test_emr_containers.py tests/providers/amazon/aws/operators/test_emr_containers.py tests/providers/amazon/aws/hooks/test_emr_containers.py
+</span></span></code></pre></div><p>Now, let&rsquo;s make sure we have an example DAG to run.</p>
 <h2 id="integration-testing">Integration Testing</h2>
 <h3 id="example-dags">Example DAGs</h3>
 <p>It&rsquo;s crucial to provide an example DAG to show folks how to use your new Operator.</p>
@@ -55,14 +55,14 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <p>First, we need to build a local version of our provider package with the <code>prepare-provider-packages</code> command.</p>
 <p><em>You may receive an error like <code>The tag providers-amazon/2.0.0 exists. Not preparing the package.</code> - if you do, you&rsquo;ll need to provide a suffix to the <code>prepare-provider-packages</code> command with the <code>-S</code> flag.</em></p>
 <p>Then you can hop into Airflow</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./breeze prepare-provider-packages amazon -S dev
-./breeze start-airflow --use-airflow-version wheel --use-packages-from-dist
-</code></pre></div><p>If you run <code>breeze</code> without the <code>start-airflow</code>, you&rsquo;ll just get dropped into a bash prompt and need to start the webserver and scheduler manually. I recommend just letting Breeze take care of that.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>./breeze prepare-provider-packages amazon -S dev
+</span></span><span style="display:flex;"><span>./breeze start-airflow --use-airflow-version wheel --use-packages-from-dist
+</span></span></code></pre></div><p>If you run <code>breeze</code> without the <code>start-airflow</code>, you&rsquo;ll just get dropped into a bash prompt and need to start the webserver and scheduler manually. I recommend just letting Breeze take care of that.</p>
 <p><img loading="lazy" src="breeze_shell.png" alt=""  />
 </p>
 <p>Once in the shell, you may need to create a user to be able to login to the Airflow UI.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">airflow users create --role Admin --username admin --password admin --email admin@example.com --firstname foo --lastname bar
-</code></pre></div><p>By default, port 28080 gets forward to Airflow so you should be able to browse to <a href="http://localhost:28080">http://localhost:28080</a> and login as <code>admin</code>/<code>admin</code>.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>airflow users create --role Admin --username admin --password admin --email admin@example.com --firstname foo --lastname bar
+</span></span></code></pre></div><p>By default, port 28080 gets forward to Airflow so you should be able to browse to <a href="http://localhost:28080">http://localhost:28080</a> and login as <code>admin</code>/<code>admin</code>.</p>
 <p><img loading="lazy" src="airflow_dag_ui.png" alt=""  />
 </p>
 <h3 id="run-your-example-dag">Run your example DAG</h3>
@@ -70,15 +70,15 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <p>With AWS, you&rsquo;ll need to define access credentials and region. You can create a new Connection to do this, or just do so in your Airflow shell.</p>
 <p>Since we&rsquo;re working localy, we&rsquo;ll use temporary access keys, but in a production environment your Airflow workers should use <a href="https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_use_switch-role-ec2.html">IAM roles</a>.</p>
 <p><em>The following commands will all be executed in the <code>breeze</code> shell.</em></p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">export AWS_ACCESS_KEY_ID<span style="color:#f92672">=</span>AKIAIOSFODNN7EXAMPLE
-export AWS_SECRET_ACCESS_KEY<span style="color:#f92672">=</span>wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-export AWS_DEFAULT_REGION<span style="color:#f92672">=</span>us-east-1
-</code></pre></div><p>Next, we&rsquo;ll try to run our example DAG using <code>airflow dags test</code>!</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>export AWS_ACCESS_KEY_ID<span style="color:#f92672">=</span>AKIAIOSFODNN7EXAMPLE
+</span></span><span style="display:flex;"><span>export AWS_SECRET_ACCESS_KEY<span style="color:#f92672">=</span>wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+</span></span><span style="display:flex;"><span>export AWS_DEFAULT_REGION<span style="color:#f92672">=</span>us-east-1
+</span></span></code></pre></div><p>Next, we&rsquo;ll try to run our example DAG using <code>airflow dags test</code>!</p>
 <p>Our script requires the EMR on EKS virtual cluster ID and job role ARN, so we&rsquo;ll supply those as environment variables.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">VIRTUAL_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno0123456789 <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
-</code></pre></div><p>You should see the job spin up and display logs in your console.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>VIRTUAL_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno0123456789 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
+</span></span></code></pre></div><p>You should see the job spin up and display logs in your console.</p>
 <p><img loading="lazy" src="emr_eks_dag_run.png" alt=""  />
 </p>
 <p>And if you refresh the Airflow UI you should see a successful run! If not&hellip;it&rsquo;s time to debug.</p>
@@ -88,16 +88,16 @@ export AWS_DEFAULT_REGION<span style="color:#f92672">=</span>us-east-1
 <p>Fortunately, you can use <code>./breeze build-docs -- --package-filter apache-airflow-providers-amazon</code> to build the docs for a specific package.</p>
 <p>Once you do that, the docs will be available in <code>docs/_build/docs/apache-airflow-providers-amazon/latest/index.html</code>. The links may not always work if you just open the file locally, but you should be able to make sure everything looks OK.</p>
 <p>One awesome feature of reST is the ability to import snippets from other files and the Airflow docs make extensive use of this. For example, in my example DAG I have the following code:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-python" data-lang="python"><span style="color:#75715e"># [START howto_operator_emr_eks_env_variables]</span>
-VIRTUAL_CLUSTER_ID <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>getenv(<span style="color:#e6db74">&#34;VIRTUAL_CLUSTER_ID&#34;</span>, <span style="color:#e6db74">&#34;test-cluster&#34;</span>)
-JOB_ROLE_ARN <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>getenv(<span style="color:#e6db74">&#34;JOB_ROLE_ARN&#34;</span>, <span style="color:#e6db74">&#34;arn:aws:iam::012345678912:role/emr_eks_default_role&#34;</span>)
-<span style="color:#75715e"># [END howto_operator_emr_eks_env_variables]</span>
-</code></pre></div><p>Note the <code>START</code> and <code>END</code> blocks. With those in there, I can include that snippet in my docs like so:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-rest" data-lang="rest">.. <span style="color:#f92672">exampleinclude</span>:: /../../airflow/providers/amazon/aws/example_dags/example_emr_eks_job.py<span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
-</span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
-</span></code></pre></div><p>And then it&rsquo;ll show up in the docs like this - pretty sweet!</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#75715e"># [START howto_operator_emr_eks_env_variables]</span>
+</span></span><span style="display:flex;"><span>VIRTUAL_CLUSTER_ID <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>getenv(<span style="color:#e6db74">&#34;VIRTUAL_CLUSTER_ID&#34;</span>, <span style="color:#e6db74">&#34;test-cluster&#34;</span>)
+</span></span><span style="display:flex;"><span>JOB_ROLE_ARN <span style="color:#f92672">=</span> os<span style="color:#f92672">.</span>getenv(<span style="color:#e6db74">&#34;JOB_ROLE_ARN&#34;</span>, <span style="color:#e6db74">&#34;arn:aws:iam::012345678912:role/emr_eks_default_role&#34;</span>)
+</span></span><span style="display:flex;"><span><span style="color:#75715e"># [END howto_operator_emr_eks_env_variables]</span>
+</span></span></code></pre></div><p>Note the <code>START</code> and <code>END</code> blocks. With those in there, I can include that snippet in my docs like so:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rest" data-lang="rest"><span style="display:flex;"><span>.. <span style="color:#f92672">exampleinclude</span>:: /../../airflow/providers/amazon/aws/example_dags/example_emr_eks_job.py<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span></code></pre></div><p>And then it&rsquo;ll show up in the docs like this - pretty sweet!</p>
 <p><img loading="lazy" src="docs_import.png" alt=""  />
 </p>
 <h3 id="provideryaml"><code>provider.yaml</code></h3>
@@ -116,8 +116,8 @@ JOB_ROLE_ARN <span style="color:#f92672">=</span> os<span style="color:#f92672">
 <li>GOTO start</li>
 </ul>
 <p>I learned that you can use <code>breeze static-checks</code> to run a subset of the static checks locally. This is pretty helpful too if you want to avoid too many <code>git push</code>es.</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">./breeze static-check all -- --files airflow/providers/amazon/aws/*/emr_containers.py 
-</code></pre></div><p>That said, I&rsquo;m <em>very</em> happy there are so many checks in this project. There are a lot of things I didn&rsquo;t know about until the checks ran (like the <code>spelling_wordlist.txt</code> file) and it&rsquo;s great to have such a high level of automation to help contributors maintain the quality of their code.</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>./breeze static-check all -- --files airflow/providers/amazon/aws/*/emr_containers.py 
+</span></span></code></pre></div><p>That said, I&rsquo;m <em>very</em> happy there are so many checks in this project. There are a lot of things I didn&rsquo;t know about until the checks ran (like the <code>spelling_wordlist.txt</code> file) and it&rsquo;s great to have such a high level of automation to help contributors maintain the quality of their code.</p>
 <h2 id="wrapup">Wrapup</h2>
 <p>I want to send a quick shoutout to the folks in the <a href="https://apache-airflow-slack.herokuapp.com/">Airflow Slack community</a> - they&rsquo;re all super nice and welcoming. And especially the folks that reviewed my PR, who were kind enough to not make <em>too</em> much of my <code>BEEP BOOP</code> error message I had committed with my initial revision. 🤖 😆</p>
 ]]></content:encoded></item></channel></rss>
