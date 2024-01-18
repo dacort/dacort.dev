@@ -33,9 +33,7 @@ params:
       - name: Blog
         url: "/posts"
       - name: AWS Videos
-        url: "https://youtube.com/channel/UCKtlXVZC2DqzayRlZYLObZw"
-      - name: Demo Code
-        url: "https://github.com/dacort/demo-code"
+        url: "https://www.youtube.com/c/dacort"
 
   homeInfoParams:
     Title: Hi there 👋
@@ -48,9 +46,11 @@ params:
     - name: twitter
       url: "https://twitter.com/dacort"
     - name: youtube
-      url: "https://youtube.com/channel/UCKtlXVZC2DqzayRlZYLObZw"
+      url: "https://www.youtube.com/c/dacort"
     - name: github
       url: "https://github.com/dacort"
+    - name: bluesky
+      url: "https://bsky.app/profile/dacort.dev"
 
   cover:
     hiddenInList: true # hide on list pages and home
