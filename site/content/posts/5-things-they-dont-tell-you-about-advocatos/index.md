@@ -38,7 +38,7 @@ I've built my [own personal data lake](https://github.com/dacort/damons-data-lak
 
 ### 3. You will have more tripods than you know what to do with
 
-{{< tweet 1405996697549950981 >}}
+{{< tweet user="dacort" id="1405996697549950981" >}}
 
 I now have tripods for light rings, green screens, white screens, and other fancy lights I don't even know about.
 

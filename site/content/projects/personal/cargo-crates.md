@@ -10,7 +10,7 @@ weight: 250
 
 All good ideas start with a Tweet. 😁
 
-{{< tweet 1359638593812140032 >}}
+{{< tweet user="dacort" id="1359638593812140032" >}}
 
 I'm often hopping around to different APIs and only want a slice of data. And I get frustrated with having to:
 - Find the right API client
