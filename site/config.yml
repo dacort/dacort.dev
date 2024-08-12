@@ -1,4 +1,4 @@
-baseURL: https://dacort.dev/
+baseURL: https://dacort.xyz/
 languageCode: en-us
 title: Damon Cortesi
 
@@ -50,7 +50,9 @@ params:
     - name: github
       url: "https://github.com/dacort"
     - name: bluesky
-      url: "https://bsky.app/profile/dacort.dev"
+      url: "https://bsky.app/profile/dacort.bsky.social"
+    - name: mastodon
+      url: "https://elk.zone/data-folks.masto.host/@dacort"
 
   cover:
     hiddenInList: true # hide on list pages and home
