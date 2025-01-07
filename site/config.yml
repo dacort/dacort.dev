@@ -5,7 +5,7 @@ title: Damon Cortesi
 theme: "PaperMod"
 
 params:
-  description: AWS Analytics Developer Advocate
+  description: Data Infrastructure Engineer
 
   ShowShareButtons: true
   ShowPostNavLinks: true
@@ -22,11 +22,11 @@ params:
     enabled: true
     title: Hi there 👋
     subtitle: >
-      My name is Damon and I'm a developer advocate for analytics at AWS.
+      My name is Damon and I'm a data infrastrucuture engineer.
 
       
       
-      💁 I work primarily with EMR but also have fun on the side with Athena and anything data-related.
+      💁 I love building open source tools, spinning up clusters with hundreds of nodes, and spending time in the woods.
     imageUrl: "/images/dacort.jpeg" # optional
     imageTitle: "@dacort" # optional
     buttons:
@@ -38,9 +38,9 @@ params:
   homeInfoParams:
     Title: Hi there 👋
     Content: >
-      My name is Damon and I'm a developer advocate for analytics at AWS.
+      My name is Damon and I'm a data infrastrucuture engineer.
 
-      - I work primarily with EMR but also have fun on the side with Athena and anything data-related.
+      - I love building open source tools, spinning up clusters with hundreds of nodes, and spending time in the woods.
 
   socialIcons:
     - name: twitter
@@ -50,9 +50,7 @@ params:
     - name: github
       url: "https://github.com/dacort"
     - name: bluesky
-      url: "https://bsky.app/profile/dacort.bsky.social"
-    - name: mastodon
-      url: "https://elk.zone/data-folks.masto.host/@dacort"
+      url: "https://bsky.app/profile/dacort.velocipig.com"
 
   cover:
     hiddenInList: true # hide on list pages and home
