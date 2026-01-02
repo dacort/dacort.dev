@@ -43,7 +43,7 @@ _The magic moment: `cd` into a tar archive and `ls` the contents, all streaming 
 
 > This looks great! I tested it out and it works _perfectly_ :chefskiss: - remember to update your todos and continue with phase 2.
 
-This back and forth iteration has been crucial to the success of my vibe-coded projects. Stopping and verify the functionality works as expected is key. The main challenge here becomes keeping track of the progress plan. Not to mention the inevitable compaction of the context that happens.
+This back and forth iteration has been crucial to the success of my vibe-coded projects. Stopping to verify the functionality works as expected is key. The main challenge here becomes keeping track of the progress plan. Not to mention the inevitable compaction of the context that happens.
 
 In order to manage these things, sometimes I'll pop open a new session to solve a specific problem. For example, when Claude was done implementing phase 2 I went and tested it and found a bug. Instead of side-tracking the main thread, I opened a new claude session just for that:
 
@@ -56,7 +56,7 @@ Back in the main prompt, I'd also sometimes ask for minor fixes or features befo
 
 > Before we move on Phase 3, let's make a couple small fixes. `ls` should be able to take parameters like a directory, subdirectory, or standard `ls` wildcard, e.g.: `ls dir` or `ls dir/subdir` or `ls *.zip`. Also if a directory has a space in it and is quoted, we should be able to `cd` into it. Like "cd backup/My Docs 2001/Backups" right now changes into `backup/My`. Also multiple `../../` should work too.
 
-Claude is really good with rust in making sure that the code continues to build and I feel like Rust's great error messaging is quite beneficial to Claude being able to easily fix any issues that pop up as well. There's less "guess and check" like what I've seen when it tries to build Python tooling.
+Claude is really good with Rust in making sure that the code continues to build and I feel like Rust's great error messaging is quite beneficial to Claude being able to easily fix any issues that pop up as well. There's less "guess and check" like what I've seen when it tries to build Python tooling.
 
 **Key commits from this phase:**
 
@@ -68,7 +68,7 @@ Claude is really good with rust in making sure that the code continues to build 
 
 ## Step 3: Refinement
 
-At some point, when I have the basic functionality I want. I'll stop and ask Claude to review the code and identify any areas of improvement for code quality, redundancy, or maintenance. This time I took a page out of a random Reddit comment I found to "review the code with YAGNI+SOLID+DRY+KISS principles".
+At some point, when I have the basic functionality I want, I'll stop and ask Claude to review the code and identify any areas of improvement for code quality, redundancy, or maintenance. This time I took a page out of a random Reddit comment I found to "review the code with YAGNI+SOLID+DRY+KISS principles".
 
 One tricky thing here is that it doesn't _always_ do a good job of ensuring it shouldn't clean things up. So you have to give enough guidance (and due diligence!) here to make sure that its assessment is accurate. I've found this is pretty hard. There was a good post from somebody that [asked Claude to improve codebase quality 200 times](https://gricha.dev/blog/the-highest-quality-codebase) and it was a great example of why you need a human in the loop.
 
