@@ -13,7 +13,7 @@ hidemeta: false
 comments: false
 description: "An overview of both my personal and work projects."
 # canonicalURL: "https://canonical.url/to/page"
-disableHLJS: true # to disable highlightjs
+# disableHLJS: true # to disable highlightjs
 disableShare: false
 disableHLJS: false
 hideSummary: false

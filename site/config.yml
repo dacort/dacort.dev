@@ -43,8 +43,6 @@ params:
       - I love building open source tools, spinning up clusters with hundreds of nodes, and spending time in the woods.
 
   socialIcons:
-    - name: twitter
-      url: "https://twitter.com/dacort"
     - name: youtube
       url: "https://www.youtube.com/c/dacort"
     - name: github
