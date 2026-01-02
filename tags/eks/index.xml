@@ -1,7 +1,6 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>eks on Damon Cortesi</title><link>https://dacort.xyz/tags/eks/</link><description>Recent content in eks on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.xyz/tags/eks/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.
-Overview Before you get started, it&amp;rsquo;s good to have an understanding of the different components of an Airflow task.</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
-<p><img loading="lazy" src="cloc.png" alt=""  />
-</p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Eks on Damon Cortesi</title><link>https://dacort.xyz/tags/eks/</link><description>Recent content in Eks on Damon Cortesi</description><generator>Hugo -- 0.153.2</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.xyz/tags/eks/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>&lt;p&gt;Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.&lt;/p&gt;
+&lt;p&gt;&lt;img loading="lazy" src="https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/cloc.png"&gt;&lt;/p&gt;</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/cloc.png"></p>
 <h2 id="overview">Overview</h2>
 <p>Before you get started, it&rsquo;s good to have an understanding of the different components of an Airflow task. The <a href="https://airflow.apache.org/docs/apache-airflow/stable/concepts/tasks.html">Airflow Tasks documentation</a> covers two of the important aspects:</p>
 <ul>
@@ -22,14 +21,12 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <p><em>The official Airflow docs on <a href="http://airflow.apache.org/docs/apache-airflow-providers/howto/create-update-providers.html">Community Providers</a> are also very helpful.</em></p>
 <h2 id="creating-your-new-operator">Creating your new operator</h2>
 <p>All provider packages live in the <a href="https://github.com/apache/airflow/tree/main/airflow/providers"><code>airflow/providers</code></a> subtree of the git repository.</p>
-<p><img loading="lazy" src="provider_listing.png" alt="List of providers"  />
-</p>
+<p><img alt="List of providers" loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/provider_listing.png"></p>
 <p>If you look in each provider directory, you&rsquo;ll see various directories including <code>hooks</code>, <code>operators</code>, and <code>sensors</code>. These provide some good examples of how to create your Operator.</p>
 <p>For now, I&rsquo;m going to create a new <code>emr_containers.py</code> file in each of the <code>hooks</code>, <code>operators</code>, and <code>sensors</code> directories. We&rsquo;ll be creating a new Hook for connecting to the <a href="https://docs.aws.amazon.com/emr-on-eks/latest/APIReference/Welcome.html">EMR on EKS API</a>, a new Sensor for waiting on jobs to complete, and an Operator that can be used to trigger your EMR on EKS jobs.</p>
 <p>I won&rsquo;t go over the implementation details here, but you can take a look at each file in the Airflow repository.</p>
 <p>One thing that was confusing to me during this process is that all three of those files have the same name&hellip;so at a glance, it was tough for me to know which component I was editing. But if you can keep this diagram in your head, it&rsquo;s pretty helpful.</p>
-<p><img loading="lazy" src="emr_containers_workflow.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/emr_containers_workflow.png"></p>
 <p>Note that there is no <code>EMRContainerSensor</code> in this workflow - that&rsquo;s because the default operator handles polling/waiting for the job to complete itself.</p>
 <h2 id="testing">Testing</h2>
 <p>Similar to the provider packages, tests for the provider packages live in the <a href="https://github.com/apache/airflow/tree/main/tests/providers"><code>tests/providers</code></a> subtree.</p>
@@ -58,13 +55,11 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>./breeze prepare-provider-packages amazon -S dev
 </span></span><span style="display:flex;"><span>./breeze start-airflow --use-airflow-version wheel --use-packages-from-dist
 </span></span></code></pre></div><p>If you run <code>breeze</code> without the <code>start-airflow</code>, you&rsquo;ll just get dropped into a bash prompt and need to start the webserver and scheduler manually. I recommend just letting Breeze take care of that.</p>
-<p><img loading="lazy" src="breeze_shell.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/breeze_shell.png"></p>
 <p>Once in the shell, you may need to create a user to be able to login to the Airflow UI.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>airflow users create --role Admin --username admin --password admin --email admin@example.com --firstname foo --lastname bar
 </span></span></code></pre></div><p>By default, port 28080 gets forward to Airflow so you should be able to browse to <a href="http://localhost:28080">http://localhost:28080</a> and login as <code>admin</code>/<code>admin</code>.</p>
-<p><img loading="lazy" src="airflow_dag_ui.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/airflow_dag_ui.png"></p>
 <h3 id="run-your-example-dag">Run your example DAG</h3>
 <p>In theory, you can Unpause your DAG in the UI and run it, but it&rsquo;s likely you need some environment variables.</p>
 <p>With AWS, you&rsquo;ll need to define access credentials and region. You can create a new Connection to do this, or just do so in your Airflow shell.</p>
@@ -76,11 +71,10 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span></code></pre></div><p>Next, we&rsquo;ll try to run our example DAG using <code>airflow dags test</code>!</p>
 <p>Our script requires the EMR on EKS virtual cluster ID and job role ARN, so we&rsquo;ll supply those as environment variables.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>VIRTUAL_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno0123456789 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
+</span></span></span><span style="display:flex;"><span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
 </span></span></code></pre></div><p>You should see the job spin up and display logs in your console.</p>
-<p><img loading="lazy" src="emr_eks_dag_run.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/emr_eks_dag_run.png"></p>
 <p>And if you refresh the Airflow UI you should see a successful run! If not&hellip;it&rsquo;s time to debug.</p>
 <h2 id="documentation">Documentation</h2>
 <p>OK! So&hellip;you&rsquo;ve built your new Operator. You&rsquo;ve written (and run) all your tests. Now it&rsquo;s time to help other folks use it!</p>
@@ -94,12 +88,11 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span><span style="display:flex;"><span><span style="color:#75715e"># [END howto_operator_emr_eks_env_variables]</span>
 </span></span></code></pre></div><p>Note the <code>START</code> and <code>END</code> blocks. With those in there, I can include that snippet in my docs like so:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rest" data-lang="rest"><span style="display:flex;"><span>.. <span style="color:#f92672">exampleinclude</span>:: /../../airflow/providers/amazon/aws/example_dags/example_emr_eks_job.py<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span></code></pre></div><p>And then it&rsquo;ll show up in the docs like this - pretty sweet!</p>
-<p><img loading="lazy" src="docs_import.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/docs_import.png"></p>
 <h3 id="provideryaml"><code>provider.yaml</code></h3>
 <p>If you want your new Operator linked in the official provider docs, make sure to also update <code>provider.yaml</code> in the relevant provider.</p>
 <h2 id="merging">Merging</h2>
@@ -120,9 +113,10 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span></code></pre></div><p>That said, I&rsquo;m <em>very</em> happy there are so many checks in this project. There are a lot of things I didn&rsquo;t know about until the checks ran (like the <code>spelling_wordlist.txt</code> file) and it&rsquo;s great to have such a high level of automation to help contributors maintain the quality of their code.</p>
 <h2 id="wrapup">Wrapup</h2>
 <p>I want to send a quick shoutout to the folks in the <a href="https://apache-airflow-slack.herokuapp.com/">Airflow Slack community</a> - they&rsquo;re all super nice and welcoming. And especially the folks that reviewed my PR, who were kind enough to not make <em>too</em> much of my <code>BEEP BOOP</code> error message I had committed with my initial revision. 🤖 😆</p>
-]]></content:encoded></item><item><title>Build your own Air Quality Monitor with OpenAQ and EMR on EKS</title><link>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</link><pubDate>Thu, 24 Jun 2021 21:20:00 +0000</pubDate><guid>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</guid><description>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.
-With Amazon EMR on EKS, you can now customize and package your own Apache Spark dependencies and I use that functionality for this post.
-Overview OpenAQ maintains a publicly accessible dataset of various air quality metrics that&amp;rsquo;s updated every half hour.</description><content:encoded><![CDATA[<p>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.</p>
+]]></content:encoded></item><item><title>Build your own Air Quality Monitor with OpenAQ and EMR on EKS</title><link>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</link><pubDate>Thu, 24 Jun 2021 21:20:00 +0000</pubDate><guid>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</guid><description>&lt;p&gt;Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.&lt;/p&gt;
+&lt;p&gt;With Amazon EMR on EKS, you can now &lt;a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/"&gt;customize and package your own Apache Spark dependencies&lt;/a&gt; and I use that functionality for this post.&lt;/p&gt;
+&lt;h2 id="overview"&gt;Overview&lt;/h2&gt;
+&lt;p&gt;OpenAQ maintains a &lt;a href="https://registry.opendata.aws/openaq/"&gt;publicly accessible dataset of various air quality metrics&lt;/a&gt; that&amp;rsquo;s updated every half hour. &lt;a href="https://docs.bokeh.org/en/latest/index.html"&gt;Bokeh&lt;/a&gt; is a popular library for Python data visualization. While it includes sample data for US county and state boundaries, we&amp;rsquo;re going to use &lt;a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html"&gt;shapefiles from census.gov&lt;/a&gt;.&lt;/p&gt;</description><content:encoded><![CDATA[<p>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.</p>
 <p>With Amazon EMR on EKS, you can now <a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/">customize and package your own Apache Spark dependencies</a> and I use that functionality for this post.</p>
 <h2 id="overview">Overview</h2>
 <p>OpenAQ maintains a <a href="https://registry.opendata.aws/openaq/">publicly accessible dataset of various air quality metrics</a> that&rsquo;s updated every half hour. <a href="https://docs.bokeh.org/en/latest/index.html">Bokeh</a> is a popular library for Python data visualization. While it includes sample data for US county and state boundaries, we&rsquo;re going to use <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html">shapefiles from census.gov</a>.</p>
@@ -139,48 +133,48 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 <h3 id="download-the-emr-base-image">Download the EMR base image</h3>
 <p>For this post, we&rsquo;ll be using the <code>us-west-2</code> region and EMR 6.3.0 release. Each region and release has a different base image URL, and you can find the full list <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/docker-custom-images-tag.html">here</a>.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws ecr get-login-password --region us-west-2 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    | docker login --username AWS --password-stdin 895885662937.dkr.ecr.us-west-2.amazonaws.com
+</span></span></span><span style="display:flex;"><span>    | docker login --username AWS --password-stdin 895885662937.dkr.ecr.us-west-2.amazonaws.com
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>docker pull 895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest
 </span></span></code></pre></div><h3 id="customize-the-image">Customize the image</h3>
 <p>EMR on EKS comes with a variety of <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-install-libraries-and-kernels.html">default libraries</a> installed including plotly and seaborn, but we wanted to try out Bokeh for my illustration as they have a great <a href="https://docs.bokeh.org/en/latest/docs/gallery/texas.html">choropleth example</a> and it&rsquo;s a library I&rsquo;ve been hearing about occasionally. I was hoping to use Bokeh&rsquo;s <code>sampledata</code> for US and county, but I ended up using <a href="https://geopandas.org/">GeoPandas</a> to re-project my map to a conic projection so Michigan wasn&rsquo;t squashed up against Wisconsin. :) GeoPandas makes it easy to read in shapefiles, so I just used the census.gov provided state and county data.</p>
 <p>Bokeh also uses Selenium and Chrome for it&rsquo;s static image generation, so we go ahead and install Chrome on the container image as well.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-dockerfile" data-lang="dockerfile"><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> 895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest</span><span style="color:#960050;background-color:#1e0010">
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-dockerfile" data-lang="dockerfile"><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">USER</span><span style="color:#e6db74"> root</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">USER</span> <span style="color:#e6db74">root</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Install Chrome</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> curl https://intoli.com/install-google-chrome.sh | bash <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    mv /usr/bin/google-chrome-stable /usr/bin/chrome<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># Install Chrome</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> curl https://intoli.com/install-google-chrome.sh | bash <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    mv /usr/bin/google-chrome-stable /usr/bin/chrome<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># We need to upgrade pip in order to install pyproj</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip3 install --upgrade pip<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># We need to upgrade pip in order to install pyproj</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> pip3 install --upgrade pip<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># If you pip install as root, use this</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip3 install <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    bokeh<span style="color:#f92672">==</span>2.3.2 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    boto3<span style="color:#f92672">==</span>1.17.93 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    chromedriver-py<span style="color:#f92672">==</span>91.0.4472.19.0 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    geopandas<span style="color:#f92672">==</span>0.9.0 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    selenium<span style="color:#f92672">==</span>3.141.0 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    shapely<span style="color:#f92672">==</span>1.7.1<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># If you pip install as root, use this</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> pip3 install <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    bokeh<span style="color:#f92672">==</span>2.3.2 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    boto3<span style="color:#f92672">==</span>1.17.93 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    chromedriver-py<span style="color:#f92672">==</span>91.0.4472.19.0 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    geopandas<span style="color:#f92672">==</span>0.9.0 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    selenium<span style="color:#f92672">==</span>3.141.0 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    shapely<span style="color:#f92672">==</span>1.7.1<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> ln -s /usr/local/lib/python3.7/site-packages/chromedriver_py/chromedriver_linux64 /usr/local/bin/chromedriver<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> ln -s /usr/local/lib/python3.7/site-packages/chromedriver_py/chromedriver_linux64 /usr/local/bin/chromedriver<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Install bokeh sample data to /usr/local/share</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> mkdir /root/.bokeh <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    echo <span style="color:#e6db74">&#34;sampledata_dir: /usr/local/share/bokeh&#34;</span> &gt; /root/.bokeh/config <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    bokeh sampledata<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># Install bokeh sample data to /usr/local/share</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> mkdir /root/.bokeh <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    echo <span style="color:#e6db74">&#34;sampledata_dir: /usr/local/share/bokeh&#34;</span> &gt; /root/.bokeh/config <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    bokeh sampledata<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Also install census data into the image :)</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_state_500k.zip  /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_500k.zip /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> chmod <span style="color:#ae81ff">644</span> /usr/local/share/bokeh/cb*.zip<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># Also install census data into the image :)</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_state_500k.zip  /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_500k.zip /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> chmod <span style="color:#ae81ff">644</span> /usr/local/share/bokeh/cb*.zip<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># This is a simple test to make sure generating the image works properly</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> test /test/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># This is a simple test to make sure generating the image works properly</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">COPY</span> test /test/<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">USER</span><span style="color:#e6db74"> hadoop:hadoop</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">USER</span> <span style="color:#e6db74">hadoop:hadoop</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span></code></pre></div><h3 id="build-and-push">Build and push</h3>
 <p>Great, we&rsquo;ve customized our image – now we just need to build and push it to a container registery somewhere! For this post, I chose GitHub but you can use any container registry like ECR or DockerHub.</p>
 <p><em>The below commands assume you have a GitHub Personal Access Token that has access to push images in the <code>CR_PAT</code> environment variable.</em></p>
@@ -194,10 +188,10 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 <h2 id="code-walkthrough">Code walkthrough</h2>
 <p>If you already built your image, you can run the below code locally. In order to access S3 data, you&rsquo;ll have to set your <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_KEY_ID</code> environment variables.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>docker run --rm -it --name airq-demo <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -e AWS_ACCESS_KEY_ID <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -e AWS_SECRET_ACCESS_KEY <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    emr-6.3.0-bokeh <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    pyspark --deploy-mode client --master <span style="color:#e6db74">&#39;local[1]&#39;</span>
+</span></span></span><span style="display:flex;"><span>    -e AWS_ACCESS_KEY_ID <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    -e AWS_SECRET_ACCESS_KEY <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    emr-6.3.0-bokeh <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    pyspark --deploy-mode client --master <span style="color:#e6db74">&#39;local[1]&#39;</span>
 </span></span></code></pre></div><h3 id="reading-and-filtering-openaq-data">Reading and filtering OpenAQ Data</h3>
 <p>The first thing we need to do is read the the data for today&rsquo;s date into a Spark dataframe.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> datetime
@@ -429,8 +423,7 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 </span></span></code></pre></div><p>Now, if you&rsquo;re running on a mac, you can just copy the generated map to your local system and open it up!</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>docker cp airq-demo:/home/hadoop/map.png .
 </span></span><span style="display:flex;"><span>open map.png
-</span></span></code></pre></div><p><img loading="lazy" src="/images/posts-airq-map.png" alt="Air Quality map"  />
-</p>
+</span></span></code></pre></div><p><img alt="Air Quality map" loading="lazy" src="/images/posts-airq-map.png"></p>
 <h3 id="running-on-emr-on-eks">Running on EMR on EKS</h3>
 <p>I&rsquo;ve bundled this all up into a pyspark script in my <code>demo-code</code> repo.</p>
 <p>This demo assumes you already have an EMR on EKS virtual cluster up and running, you&rsquo;ve built the image in the first part and pushed it to a container registry, and the IAM Role you use to run the job has access to both read and write to an S3 bucket.</p>
@@ -452,18 +445,18 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 </span></span><span style="display:flex;"><span>export EMR_EKS_EXECUTION_ARN<span style="color:#f92672">=</span>arn:aws:iam::123456789012:role/emr_eks_default_role
 </span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#75715e"># Replace ghcr.io/OWNER/emr-6.3.0-bokeh:latest below with your image URL</span>
 </span></span><span style="display:flex;"><span>aws emr-containers start-job-run <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --name openaq-conus <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --job-driver <span style="color:#e6db74">&#39;{
+</span></span></span><span style="display:flex;"><span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --name openaq-conus <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --job-driver <span style="color:#e6db74">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        &#34;sparkSubmitJobDriver&#34;: {
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;entryPoint&#34;: &#34;s3://&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;/code/generate_aqi_map.py&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;entryPointArguments&#34;: [&#34;&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;&#34;, &#34;output/airq/&#34;],
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;sparkSubmitParameters&#34;: &#34;--conf spark.kubernetes.container.image=ghcr.io/OWNER/emr-6.3.0-bokeh:latest&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        }
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    }&#39;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --configuration-overrides <span style="color:#e6db74">&#39;{
+</span></span></span><span style="display:flex;"><span>    --configuration-overrides <span style="color:#e6db74">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        &#34;monitoringConfiguration&#34;: {
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;s3MonitoringConfiguration&#34;: { &#34;logUri&#34;: &#34;s3://&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;/logs/&#34; }
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        }
@@ -476,13 +469,12 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>While the job is running, you can get the fetch the status of the job using the <code>emr-containers describe-job-run</code> command.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws emr-containers describe-job-run <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --id 0000000abcdefg12345
+</span></span></span><span style="display:flex;"><span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --id 0000000abcdefg12345
 </span></span></code></pre></div><p>Once the job is in the <code>COMPLETED</code> state, you should be able to copy the resulting image from your S3 bucket!</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws s3 cp s3://<span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span>/output/airq/2021-06-24-latest.png .
 </span></span></code></pre></div><p>And if you open that file, you&rsquo;ll get the most recent PM2.5 readings!</p>
-<p><img loading="lazy" src="/images/posts-airq-map.png" alt="Air Quality map"  />
-</p>
+<p><img alt="Air Quality map" loading="lazy" src="/images/posts-airq-map.png"></p>
 <h2 id="wrapup">Wrapup</h2>
 <p>Be sure to check out the <a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/">launch post</a> for more details, the documentation for <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/docker-custom-images.html">customing docker images for EMR on EKS</a>, and my <a href="https://youtu.be/0x4DRKmNPfQ">demo video</a>.</p>
 ]]></content:encoded></item></channel></rss>

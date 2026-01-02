@@ -1,7 +1,6 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>airflow on Damon Cortesi</title><link>https://dacort.xyz/tags/airflow/</link><description>Recent content in airflow on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.xyz/tags/airflow/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.
-Overview Before you get started, it&amp;rsquo;s good to have an understanding of the different components of an Airflow task.</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
-<p><img loading="lazy" src="cloc.png" alt=""  />
-</p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Airflow on Damon Cortesi</title><link>https://dacort.xyz/tags/airflow/</link><description>Recent content in Airflow on Damon Cortesi</description><generator>Hugo -- 0.153.2</generator><language>en-us</language><lastBuildDate>Fri, 09 Jul 2021 11:30:00 -0700</lastBuildDate><atom:link href="https://dacort.xyz/tags/airflow/index.xml" rel="self" type="application/rss+xml"/><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>&lt;p&gt;Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.&lt;/p&gt;
+&lt;p&gt;&lt;img loading="lazy" src="https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/cloc.png"&gt;&lt;/p&gt;</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/cloc.png"></p>
 <h2 id="overview">Overview</h2>
 <p>Before you get started, it&rsquo;s good to have an understanding of the different components of an Airflow task. The <a href="https://airflow.apache.org/docs/apache-airflow/stable/concepts/tasks.html">Airflow Tasks documentation</a> covers two of the important aspects:</p>
 <ul>
@@ -22,14 +21,12 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <p><em>The official Airflow docs on <a href="http://airflow.apache.org/docs/apache-airflow-providers/howto/create-update-providers.html">Community Providers</a> are also very helpful.</em></p>
 <h2 id="creating-your-new-operator">Creating your new operator</h2>
 <p>All provider packages live in the <a href="https://github.com/apache/airflow/tree/main/airflow/providers"><code>airflow/providers</code></a> subtree of the git repository.</p>
-<p><img loading="lazy" src="provider_listing.png" alt="List of providers"  />
-</p>
+<p><img alt="List of providers" loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/provider_listing.png"></p>
 <p>If you look in each provider directory, you&rsquo;ll see various directories including <code>hooks</code>, <code>operators</code>, and <code>sensors</code>. These provide some good examples of how to create your Operator.</p>
 <p>For now, I&rsquo;m going to create a new <code>emr_containers.py</code> file in each of the <code>hooks</code>, <code>operators</code>, and <code>sensors</code> directories. We&rsquo;ll be creating a new Hook for connecting to the <a href="https://docs.aws.amazon.com/emr-on-eks/latest/APIReference/Welcome.html">EMR on EKS API</a>, a new Sensor for waiting on jobs to complete, and an Operator that can be used to trigger your EMR on EKS jobs.</p>
 <p>I won&rsquo;t go over the implementation details here, but you can take a look at each file in the Airflow repository.</p>
 <p>One thing that was confusing to me during this process is that all three of those files have the same name&hellip;so at a glance, it was tough for me to know which component I was editing. But if you can keep this diagram in your head, it&rsquo;s pretty helpful.</p>
-<p><img loading="lazy" src="emr_containers_workflow.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/emr_containers_workflow.png"></p>
 <p>Note that there is no <code>EMRContainerSensor</code> in this workflow - that&rsquo;s because the default operator handles polling/waiting for the job to complete itself.</p>
 <h2 id="testing">Testing</h2>
 <p>Similar to the provider packages, tests for the provider packages live in the <a href="https://github.com/apache/airflow/tree/main/tests/providers"><code>tests/providers</code></a> subtree.</p>
@@ -58,13 +55,11 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>./breeze prepare-provider-packages amazon -S dev
 </span></span><span style="display:flex;"><span>./breeze start-airflow --use-airflow-version wheel --use-packages-from-dist
 </span></span></code></pre></div><p>If you run <code>breeze</code> without the <code>start-airflow</code>, you&rsquo;ll just get dropped into a bash prompt and need to start the webserver and scheduler manually. I recommend just letting Breeze take care of that.</p>
-<p><img loading="lazy" src="breeze_shell.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/breeze_shell.png"></p>
 <p>Once in the shell, you may need to create a user to be able to login to the Airflow UI.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>airflow users create --role Admin --username admin --password admin --email admin@example.com --firstname foo --lastname bar
 </span></span></code></pre></div><p>By default, port 28080 gets forward to Airflow so you should be able to browse to <a href="http://localhost:28080">http://localhost:28080</a> and login as <code>admin</code>/<code>admin</code>.</p>
-<p><img loading="lazy" src="airflow_dag_ui.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/airflow_dag_ui.png"></p>
 <h3 id="run-your-example-dag">Run your example DAG</h3>
 <p>In theory, you can Unpause your DAG in the UI and run it, but it&rsquo;s likely you need some environment variables.</p>
 <p>With AWS, you&rsquo;ll need to define access credentials and region. You can create a new Connection to do this, or just do so in your Airflow shell.</p>
@@ -76,11 +71,10 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span></code></pre></div><p>Next, we&rsquo;ll try to run our example DAG using <code>airflow dags test</code>!</p>
 <p>Our script requires the EMR on EKS virtual cluster ID and job role ARN, so we&rsquo;ll supply those as environment variables.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>VIRTUAL_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno0123456789 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
+</span></span></span><span style="display:flex;"><span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
 </span></span></code></pre></div><p>You should see the job spin up and display logs in your console.</p>
-<p><img loading="lazy" src="emr_eks_dag_run.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/emr_eks_dag_run.png"></p>
 <p>And if you refresh the Airflow UI you should see a successful run! If not&hellip;it&rsquo;s time to debug.</p>
 <h2 id="documentation">Documentation</h2>
 <p>OK! So&hellip;you&rsquo;ve built your new Operator. You&rsquo;ve written (and run) all your tests. Now it&rsquo;s time to help other folks use it!</p>
@@ -94,12 +88,11 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span><span style="display:flex;"><span><span style="color:#75715e"># [END howto_operator_emr_eks_env_variables]</span>
 </span></span></code></pre></div><p>Note the <code>START</code> and <code>END</code> blocks. With those in there, I can include that snippet in my docs like so:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rest" data-lang="rest"><span style="display:flex;"><span>.. <span style="color:#f92672">exampleinclude</span>:: /../../airflow/providers/amazon/aws/example_dags/example_emr_eks_job.py<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span></code></pre></div><p>And then it&rsquo;ll show up in the docs like this - pretty sweet!</p>
-<p><img loading="lazy" src="docs_import.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/docs_import.png"></p>
 <h3 id="provideryaml"><code>provider.yaml</code></h3>
 <p>If you want your new Operator linked in the official provider docs, make sure to also update <code>provider.yaml</code> in the relevant provider.</p>
 <h2 id="merging">Merging</h2>

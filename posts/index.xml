@@ -1,7 +1,101 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>Posts on Damon Cortesi</title><link>https://dacort.xyz/posts/</link><description>Recent content in Posts on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Fri, 04 Feb 2022 10:30:00 -0800</lastBuildDate><atom:link href="https://dacort.xyz/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>"Serverless" Analytics of Twitter Data with MSK Connect and Athena</title><link>https://dacort.xyz/posts/serverless-analytics-of-twitter-data/</link><pubDate>Fri, 04 Feb 2022 10:30:00 -0800</pubDate><guid>https://dacort.xyz/posts/serverless-analytics-of-twitter-data/</guid><description>Like many, I was recently drawn in to a simple word game by the name of &amp;ldquo;Wordle&amp;rdquo;. Also, like many I wanted to dive into the analytics of all the yellow, green, and white-or-black-depending-on-your-dark-mode blocks. While you can easily query tweet volume using the Twitter API, I wanted to dig deeper. And the tweets were growing&amp;hellip;
-Given the recent announcement of MSK Connect, I wanted to see if I could easily consume the Twitter Stream into S3 and query the data with Athena.</description><content:encoded><![CDATA[<p>Like many, <a href="https://twitter.com/dacort/status/1466940658271199233?s=20&amp;t=cEoyLkoJSazoAHW9XRhjvw">I was recently</a> drawn in to a simple word game by the name of &ldquo;Wordle&rdquo;. Also, like many I wanted to dive into the analytics of all the yellow, green, and white-or-black-depending-on-your-dark-mode blocks. While you can easily <a href="https://www.tweetstats.com/">query tweet volume</a> using the Twitter API, I wanted to dig deeper. And the tweets were growing&hellip;</p>
-<p><img loading="lazy" src="wordle_counts_2021-01-13.png" alt=""  />
-</p>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Posts on Damon Cortesi</title><link>https://dacort.xyz/posts/</link><description>Recent content in Posts on Damon Cortesi</description><generator>Hugo -- 0.153.2</generator><language>en-us</language><lastBuildDate>Thu, 01 Jan 2026 16:01:12 -0800</lastBuildDate><atom:link href="https://dacort.xyz/posts/index.xml" rel="self" type="application/rss+xml"/><item><title>Vibe Coding Rust CLIs</title><link>https://dacort.xyz/posts/vibe-coding-rust-clis/</link><pubDate>Thu, 01 Jan 2026 16:01:12 -0800</pubDate><guid>https://dacort.xyz/posts/vibe-coding-rust-clis/</guid><description>&lt;p&gt;This holiday break, I&amp;rsquo;ve been working on an arcane side project of resurrecting historical versions of my blog from 2002. As part of this, I&amp;rsquo;ve been digging around various S3 buckets for backups of old source code and mysql dumps. But doing so in the AWS console is not the most ergonomic, so I wanted to (have AI) whip up a quick terminal UI that could make it easier.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;ve done this a couple times now, first with &lt;a href="https://github.com/dacort/s3grep"&gt;s3grep&lt;/a&gt;, and somebody suggested it might be good to document my journey so here we go!&lt;/p&gt;</description><content:encoded><![CDATA[<p>This holiday break, I&rsquo;ve been working on an arcane side project of resurrecting historical versions of my blog from 2002. As part of this, I&rsquo;ve been digging around various S3 buckets for backups of old source code and mysql dumps. But doing so in the AWS console is not the most ergonomic, so I wanted to (have AI) whip up a quick terminal UI that could make it easier.</p>
+<p>I&rsquo;ve done this a couple times now, first with <a href="https://github.com/dacort/s3grep">s3grep</a>, and somebody suggested it might be good to document my journey so here we go!</p>
+<p>For reference, total development time was about 6 hours, including dinner and bedtime. Final lines of code is at 2,654, none of which was written by me.</p>
+<h2 id="step-1-the-prompt">Step 1: The Prompt</h2>
+<p>This is where it all starts of course. I try to be as specific as possible and describe the requirements.</p>
+<blockquote>
+<p>Hey fren - I want to build a sweet little rust-based s3 explorer. It should function like a typical unix shell with the caveat that it operates against s3 buckets. When you first enter and do an <code>ls</code> it lists your available buckets. You can <code>cd</code> into a bucket and <code>cd</code> into prefixes in that bucket. You can <code>cat</code> files. And then here comes the magic sauce, you can also <code>cd</code> into different archives (zip, tar, tar.gz, bz, gz, etc). If <em>possible</em> the tool shouldn&rsquo;t download the whole archive. For example, the tar archive itself can read gzip stream from stdin - we should be able to emulate this behavior in rust itself. In addition, if we do a recursive <code>ls -R</code> it should include files in those archives as well. Do you think we can make this? And also make it a pleast CLI experience. :)</p>
+</blockquote>
+<p>Claude is pretty good now at entering plan mode and it automatically will ask clarifying questions. Previously you had to direct this, but not anymore. In this case it asked what we should name the project, what archive formats to prioritize, any other shell commands to implement, and if archive indexes should be cached.</p>
+<p>But that was pretty much it - at this point, it whipped up a 250-line plan file and I just said &ldquo;go for it&rdquo;.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/a47345b">Initial revision 👋</a> - Claude&rsquo;s first implementation from the prompt</li>
+</ul>
+<h2 id="step-2-iterate">Step 2: Iterate</h2>
+<p>Claude automatically defined the first phase as &ldquo;Working shell that can navigate S3 buckets and read files&rdquo;. In just a few minutes it was ready with the foundation of the CLI. It had already built a debug build, so I just ran that, browsed around, and made sure the basic <code>cd</code> and <code>ls</code> functionality worked.</p>
+<p><img alt="s3sh demo showing navigation into tar archives" loading="lazy" src="/posts/vibe-coding-rust-clis/s3sh.png">
+<em>The magic moment: <code>cd</code> into a tar archive and <code>ls</code> the contents, all streaming from S3</em></p>
+<blockquote>
+<p>This looks great! I tested it out and it works <em>perfectly</em> :chefskiss: - remember to update your todos and continue with phase 2.</p>
+</blockquote>
+<p>This back and forth iteration has been crucial to the success of my vibe-coded projects. Stopping to verify the functionality works as expected is key. The main challenge here becomes keeping track of the progress plan. Not to mention the inevitable compaction of the context that happens.</p>
+<p>In order to manage these things, sometimes I&rsquo;ll pop open a new session to solve a specific problem. For example, when Claude was done implementing phase 2 I went and tested it and found a bug. Instead of side-tracking the main thread, I opened a new claude session just for that:</p>
+<blockquote>
+<p>I have another claude agent working on zip implementation for this prject, but when I try to cd into a zip file, I get the following error:
+<code>&lt;stack trace below&gt;</code></p>
+</blockquote>
+<p>Claude would fix the issue and I&rsquo;d verify, then go back to the main prompt to continue. If I ran into a similar issue (like I did with <code>tgz</code> archives), I&rsquo;d pop back into the bug fix session with a <code>claude -r</code>.</p>
+<p>Back in the main prompt, I&rsquo;d also sometimes ask for minor fixes or features before moving on.</p>
+<blockquote>
+<p>Before we move on Phase 3, let&rsquo;s make a couple small fixes. <code>ls</code> should be able to take parameters like a directory, subdirectory, or standard <code>ls</code> wildcard, e.g.: <code>ls dir</code> or <code>ls dir/subdir</code> or <code>ls *.zip</code>. Also if a directory has a space in it and is quoted, we should be able to <code>cd</code> into it. Like &ldquo;cd backup/My Docs 2001/Backups&rdquo; right now changes into <code>backup/My</code>. Also multiple <code>../../</code> should work too.</p>
+</blockquote>
+<p>Claude is really good with Rust in making sure that the code continues to build and I feel like Rust&rsquo;s great error messaging is quite beneficial to Claude being able to easily fix any issues that pop up as well. There&rsquo;s less &ldquo;guess and check&rdquo; like what I&rsquo;ve seen when it tries to build Python tooling.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/a627c7e">v2, adds .zip support</a> - Phase 2 archive support</li>
+<li><a href="https://github.com/dacort/s3sh/commit/944e661">Add support for tarchives</a> - tar/tgz implementation</li>
+<li><a href="https://github.com/dacort/s3sh/commit/cc7b82e">Fix ls/cd handling</a> - Small fixes before Phase 3 (wildcard support, quoted paths)</li>
+<li><a href="https://github.com/dacort/s3sh/commit/183c57e">Add a progress spinner</a> - UX improvements</li>
+<li><a href="https://github.com/dacort/s3sh/commit/9cb433b">Fix cross-region s3 support</a> - Bug fix in separate session</li>
+</ul>
+<h2 id="step-3-refinement">Step 3: Refinement</h2>
+<p>At some point, when I have the basic functionality I want, I&rsquo;ll stop and ask Claude to review the code and identify any areas of improvement for code quality, redundancy, or maintenance. This time I took a page out of a random Reddit comment I found to &ldquo;review the code with YAGNI+SOLID+DRY+KISS principles&rdquo;.</p>
+<p>One tricky thing here is that it doesn&rsquo;t <em>always</em> do a good job of ensuring it shouldn&rsquo;t clean things up. So you have to give enough guidance (and due diligence!) here to make sure that its assessment is accurate. I&rsquo;ve found this is pretty hard. There was a good post from somebody that <a href="https://gricha.dev/blog/the-highest-quality-codebase">asked Claude to improve codebase quality 200 times</a> and it was a great example of why you need a human in the loop.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/bc4dff0">optimizing</a> - YAGNI+SOLID+DRY+KISS review</li>
+<li><a href="https://github.com/dacort/s3sh/commit/c7e4f0e">Apply cargo clippy fixes</a> - Code quality improvements</li>
+<li><a href="https://github.com/dacort/s3sh/commit/12d03db">cargo fmt</a> - Formatting cleanup</li>
+</ul>
+<h2 id="step-4-managing-context">Step 4: Managing Context</h2>
+<p>Ah the dreaded <code>Context left until auto-compact</code> counter. I&rsquo;ve had good luck here with telling Claude to just keep a <code>PLAN.md</code> file up-to-date, except in the case of larger projects. I <em>didn&rsquo;t</em> do that for this project, as I saw Claude created its own plan file, and regretted it. Once the auto-compaction happened, Claude forgot about the plan but luckily I still had a copy of it in <code>~/.claude/plans</code> I could reference. I probably should have added a nice <code>CLAUDE.md</code> or directed it to write out the plan file locally, but alas.</p>
+<p>I&rsquo;ve also tried Steve Yegge&rsquo;s <a href="https://github.com/steveyegge/beads/">Beads project</a> for task management but I honestly haven&rsquo;t had great luck with it. I think it&rsquo;s largely a &ldquo;me&rdquo; issue though - I just haven&rsquo;t been consistent with it. I&rsquo;m excited for his new <a href="https://github.com/steveyegge/gastown">Gas Town</a> project as well.</p>
+<h2 id="step-5-polish">Step 5: Polish</h2>
+<p>Before I publish something, I like to have a basic <code>README</code> and <em>at least</em> a test or two. If I have something I can reference, all the better. With my <code>s3grep</code> tool I had manually built up the README and publishing workflow, so I just re-used that for this case.</p>
+<blockquote>
+<p>I&rsquo;d like to publish this on github&hellip;before I do I need a quick README and a publish workflow. You can model the readme after my other project ( <a href="https://github.com/dacort/s3grep/blob/main/README.md">https://github.com/dacort/s3grep/blob/main/README.md</a> ) as well as the release workflow ( <a href="https://github.com/dacort/s3grep/blob/main/.github/workflows/release-plz.yml">https://github.com/dacort/s3grep/blob/main/.github/workflows/release-plz.yml</a> ).</p>
+</blockquote>
+<p>I did the same with tests.</p>
+<blockquote>
+<p>Hi there! I need to quickly clean up the tests for this project. <code>cargo test</code> fails because the methods don&rsquo;t exist, so we can just remove those tests. I&rsquo;d like to also create a set of <em>basic</em> integration test for the minimal required functionality (cd, cat, cd into archive) using localstack similar to how this test in s3grep runs ( <a href="https://github.com/dacort/s3grep/blob/main/tests/integration_s3.rs">https://github.com/dacort/s3grep/blob/main/tests/integration_s3.rs</a> and <a href="https://github.com/dacort/s3grep/blob/main/.github/workflows/ci.yml">https://github.com/dacort/s3grep/blob/main/.github/workflows/ci.yml</a> )</p>
+</blockquote>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/40532be">Add shell completion</a> - Tab completion support</li>
+<li><a href="https://github.com/dacort/s3sh/commit/6915b71">Add readme/release details</a> - README modeled after s3grep</li>
+<li><a href="https://github.com/dacort/s3sh/commit/cfb7bf7">Add basic integration tests</a> - Testing with localstack</li>
+</ul>
+<h2 id="tracking-changes">Tracking Changes</h2>
+<p>I should note that after every verification step that I manually perform, I <code>git add</code> all the new files. I could have Claude do this I suppose, but I like the process of verifying and seeing what&rsquo;s changed to at least understand the code <em>a tiny bit</em>.</p>
+<h2 id="ship-it-">Ship It 🚀</h2>
+<p>This is still largely manual - I create the repo myself, set up any necessary API secrets and <code>git push</code> when ready.</p>
+<p>One sidenote, I&rsquo;ve been making use of GitHub&rsquo;s CoPilot for small tasks lately. For example, I knew I had a small issue with <code>cd ..</code> inside archives and assigned <a href="https://github.com/dacort/s3sh/pull/3">that issue to copilot</a>.</p>
+<p>I still need to pull and manually validate the change, but I&rsquo;ve found it to be incredibly useful for easy management of focused tasks.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/c165183">Rename 🫣</a> - Final project naming</li>
+<li><a href="https://github.com/dacort/s3sh/commit/b90643b">chore: release v0.1.0</a> - First release</li>
+<li><a href="https://github.com/dacort/s3sh/commit/1bac3ac">Fix cd .. from archive root</a> - Post-release fix (the Copilot PR mentioned!)</li>
+</ul>
+<h2 id="would-i-do-this-again">Would I Do This Again?</h2>
+<p>Absolutely. For tools like this - weekend projects, internal utilities, one-off explorers, when you know exactly what you want - this approach is perfect. I do wish I was more familiar with Rust, but I do think the combination of Rust CLIs with Claude is extremely powerful.</p>
+<p><strong>Tips if you try this:</strong></p>
+<ul>
+<li>Be specific in your initial prompt (the time spent here pays off 10x)</li>
+<li>Test frequently and give feedback (don&rsquo;t let Claude go too far down wrong paths)</li>
+<li>Use separate sessions for bug fixes (keeps the main thread focused)</li>
+<li>Trust the compiler (if it builds, it probably works)</li>
+<li>Keep a plan file (seriously, learn from my mistake)</li>
+</ul>
+<p>btw&hellip;I found those backups. Isn&rsquo;t this site <em>so</em> 2002?! Maybe I should have left it archived. 😅</p>
+<p><img alt="my website from 2002" loading="lazy" src="/posts/vibe-coding-rust-clis/dcortesi_v1.png">
+<em>complete with a corny poem</em></p>
+]]></content:encoded></item><item><title>"Serverless" Analytics of Twitter Data with MSK Connect and Athena</title><link>https://dacort.xyz/posts/serverless-analytics-of-twitter-data/</link><pubDate>Fri, 04 Feb 2022 10:30:00 -0800</pubDate><guid>https://dacort.xyz/posts/serverless-analytics-of-twitter-data/</guid><description>&lt;p&gt;Like many, &lt;a href="https://twitter.com/dacort/status/1466940658271199233?s=20&amp;amp;t=cEoyLkoJSazoAHW9XRhjvw"&gt;I was recently&lt;/a&gt; drawn in to a simple word game by the name of &amp;ldquo;Wordle&amp;rdquo;. Also, like many I wanted to dive into the analytics of all the yellow, green, and white-or-black-depending-on-your-dark-mode blocks. While you can easily &lt;a href="https://www.tweetstats.com/"&gt;query tweet volume&lt;/a&gt; using the Twitter API, I wanted to dig deeper. And the tweets were growing&amp;hellip;&lt;/p&gt;
+&lt;p&gt;&lt;img loading="lazy" src="https://dacort.xyz/posts/serverless-analytics-of-twitter-data/wordle_counts_2021-01-13.png"&gt;&lt;/p&gt;
+&lt;p&gt;Given the recent announcement of &lt;a href="https://aws.amazon.com/blogs/aws/introducing-amazon-msk-connect-stream-data-to-and-from-your-apache-kafka-clusters-using-managed-connectors/"&gt;MSK Connect&lt;/a&gt;, I wanted to see if I could easily consume the Twitter Stream into S3 and query the data with Athena. So I looked around a bit and found this &lt;a href="https://github.com/jcustenborder/kafka-connect-twitter"&gt;kafka-connect-twitter&lt;/a&gt; GitHub repo and this &lt;a href="https://www.confluent.io/blog/using-ksql-to-analyse-query-and-transform-data-in-kafka/"&gt;great blog post from Confluent&lt;/a&gt; on analyzing Twitter data using that connector. So&amp;hellip;off to the AWS console!&lt;/p&gt;</description><content:encoded><![CDATA[<p>Like many, <a href="https://twitter.com/dacort/status/1466940658271199233?s=20&amp;t=cEoyLkoJSazoAHW9XRhjvw">I was recently</a> drawn in to a simple word game by the name of &ldquo;Wordle&rdquo;. Also, like many I wanted to dive into the analytics of all the yellow, green, and white-or-black-depending-on-your-dark-mode blocks. While you can easily <a href="https://www.tweetstats.com/">query tweet volume</a> using the Twitter API, I wanted to dig deeper. And the tweets were growing&hellip;</p>
+<p><img loading="lazy" src="/posts/serverless-analytics-of-twitter-data/wordle_counts_2021-01-13.png"></p>
 <p>Given the recent announcement of <a href="https://aws.amazon.com/blogs/aws/introducing-amazon-msk-connect-stream-data-to-and-from-your-apache-kafka-clusters-using-managed-connectors/">MSK Connect</a>, I wanted to see if I could easily consume the Twitter Stream into S3 and query the data with Athena. So I looked around a bit and found this <a href="https://github.com/jcustenborder/kafka-connect-twitter">kafka-connect-twitter</a> GitHub repo and this <a href="https://www.confluent.io/blog/using-ksql-to-analyse-query-and-transform-data-in-kafka/">great blog post from Confluent</a> on analyzing Twitter data using that connector. So&hellip;off to the AWS console!</p>
 <p>I&rsquo;ll walk through the steps of creating everything below, but I did create a CloudFormation template in my <a href="https://github.com/dacort/serverless-twitter-analytics.git">serverless-twitter-analytics</a> repository that creates everything you need except for building the connector artifacts and creating the connectors in MSK.</p>
 <h2 id="setting-up-amazon-msk">Setting up Amazon MSK</h2>
@@ -21,24 +115,24 @@ Given the recent announcement of MSK Connect, I wanted to see if I could easily 
 </ul>
 <h3 id="build-the-twitter-connector">Build the Twitter connector</h3>
 <p>To address #1, I used a <a href="https://github.com/dacort/serverless-twitter-analytics/blob/main/Dockerfile">Dockerfile</a> to download/build the Twitter connector.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-docker" data-lang="docker"><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> openjdk:8 AS build-stage</span><span style="color:#960050;background-color:#1e0010">
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-docker" data-lang="docker"><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">openjdk:8</span> <span style="color:#66d9ef">AS</span> <span style="color:#e6db74">build-stage</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> apt-get update <span style="color:#f92672">&amp;&amp;</span> apt-get install -y <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    maven <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    zip<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> apt-get update <span style="color:#f92672">&amp;&amp;</span> apt-get install -y <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    maven <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    zip<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">WORKDIR</span><span style="color:#e6db74"> /usr/src/ktwit</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://github.com/jcustenborder/kafka-connect-twitter/archive/refs/tags/0.3.34.tar.gz /usr/src/ktwit/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">WORKDIR</span> <span style="color:#e6db74">/usr/src/ktwit</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">ADD</span> https://github.com/jcustenborder/kafka-connect-twitter/archive/refs/tags/0.3.34.tar.gz /usr/src/ktwit/<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> tar xzf 0.3.34.tar.gz <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    cd kafka-connect-twitter-0.3.34 <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    mvn clean package<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> tar xzf 0.3.34.tar.gz <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    cd kafka-connect-twitter-0.3.34 <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    mvn clean package<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> tar xzf kafka-connect-twitter-0.3.34/target/kafka-connect-twitter-0.3-SNAPSHOT.tar.gz <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    zip -rj kafka-connect-twitter-0.3.34.zip usr/share/kafka-connect/kafka-connect-twitter/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> tar xzf kafka-connect-twitter-0.3.34/target/kafka-connect-twitter-0.3-SNAPSHOT.tar.gz <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    zip -rj kafka-connect-twitter-0.3.34.zip usr/share/kafka-connect/kafka-connect-twitter/<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> scratch AS export-stage</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> --from<span style="color:#f92672">=</span>build-stage /usr/src/ktwit/*.zip /<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">scratch</span> <span style="color:#66d9ef">AS</span> <span style="color:#e6db74">export-stage</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">COPY</span> --from<span style="color:#f92672">=</span>build-stage /usr/src/ktwit/*.zip /<span style="color:#960050;background-color:#1e0010">
 </span></span></span></code></pre></div><p>MSK plugins must be be a zip file, so the last steps in the Dockerfile also decompress the <code>.tar.gz</code> with the built jar and its dependencies and repackage them into a zip file. I use the following command to build and copy the zip file to my local filesystem.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>docker build --output . .
 </span></span></code></pre></div><p>You should have a <code>kafka-connect-twitter-0.3.34.zip</code> locally - go ahead and upload that to S3.</p>
@@ -195,8 +289,7 @@ Given the recent announcement of MSK Connect, I wanted to see if I could easily 
 </span></span><span style="display:flex;"><span>2022-01-10 16:35:01      <span style="color:#ae81ff">55148</span> wordle_data/json/twitter_json/year<span style="color:#f92672">=</span>2022/month<span style="color:#f92672">=</span>01/day<span style="color:#f92672">=</span>11/hour<span style="color:#f92672">=</span>00/twitter_json+0+0000003681.json.gz
 </span></span></code></pre></div><p>Next, we&rsquo;ll set up a <a href="https://console.aws.amazon.com/glue/home#catalog:tab=crawlers">Glue Crawler</a> to create our data catalog table and keep the partitions up-to-date.</p>
 <p>When creating the crawler, point it to the S3 bucket and prefix you configured above (<code>s3://&lt;BUCKET_NAME&gt;/wordle_data/json/</code>). I also configured it to &ldquo;Crawl new folders only&rdquo; and run at 6 minutes after the hour (<code>06 0/1 * * ? *</code>). Since I configured the S3 sink connector to rate files every 5 minute, this ensures that every run should pick up the new partition as quick as possible. Here&rsquo;s a screenshot of my final configuration:</p>
-<p><img loading="lazy" src="glue_crawler_config.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/serverless-analytics-of-twitter-data/glue_crawler_config.png"></p>
 <p>You may want to run your crawler manually the first time, but once you do you should see a new table show up in your data catalog! And you should be able to immediately query the data in Athena! (<em>If you haven&rsquo;t setup Athena yet, you&rsquo;ll need to create a bucket for results.</em>)</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#66d9ef">SELECT</span> createdat, text,
 </span></span><span style="display:flex;"><span>    regexp_extract(text, <span style="color:#e6db74">&#39;Wordle (\d+) (\d)/6&#39;</span>, <span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">AS</span> wordle_index,
@@ -209,11 +302,11 @@ Given the recent announcement of MSK Connect, I wanted to see if I could easily 
 </span></span><span style="display:flex;"><span><span style="color:#66d9ef">WHERE</span> retweet<span style="color:#f92672">=</span><span style="color:#66d9ef">false</span>
 </span></span><span style="display:flex;"><span>    <span style="color:#66d9ef">AND</span> <span style="color:#66d9ef">CAST</span>(regexp_extract(text, <span style="color:#e6db74">&#39;Wordle (\d+) (\d)/6&#39;</span>, <span style="color:#ae81ff">1</span>) <span style="color:#66d9ef">as</span> int) <span style="color:#66d9ef">BETWEEN</span> <span style="color:#ae81ff">100</span> <span style="color:#66d9ef">AND</span> <span style="color:#ae81ff">300</span>
 </span></span><span style="display:flex;"><span><span style="color:#66d9ef">limit</span> <span style="color:#ae81ff">10</span>;
-</span></span></code></pre></div><p><img loading="lazy" src="athena_query.png" alt=""  />
-</p>
+</span></span></code></pre></div><p><img loading="lazy" src="/posts/serverless-analytics-of-twitter-data/athena_query.png"></p>
 <p>And that&rsquo;s it! Now you can query to your heart&rsquo;s content. :) <em>Note that <code>SELECT *</code> won&rsquo;t work due to some of the nested fields not being defined properly.</em></p>
-]]></content:encoded></item><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.xyz/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.xyz/posts/modern-data-lake-storage-layers/</guid><description>In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, Uber announced Hudi - an incremental processing framework for data pipelines. In 2018, Netflix introduced Iceberg - a new table format for managing extremely large cloud datasets. And in 2019, Databricks open-sourced Delta Lake - originally intended to bring ACID transactions to data lakes.
-📹 If you&amp;rsquo;d like to watch a video that discusses the content of this post, I&amp;rsquo;ve also recorded an overview here.</description><content:encoded><![CDATA[<p>In recent years we&rsquo;ve seen a rise in new storage layers for data lakes. In 2017, <a href="https://eng.uber.com/hoodie/">Uber announced Hudi</a> - an incremental processing framework for data pipelines. In 2018, <a href="https://conferences.oreilly.com/strata/strata-ny-2018/public/schedule/detail/69503.html">Netflix introduced Iceberg</a> - a new table format for managing extremely large cloud datasets. And in 2019, <a href="https://techcrunch.com/2019/04/24/databricks-open-sources-delta-lake-to-make-data-lakes-more-reliable/">Databricks open-sourced Delta Lake</a> - originally intended to bring ACID transactions to data lakes.</p>
+]]></content:encoded></item><item><title>An Introduction to Modern Data Lake Storage Layers</title><link>https://dacort.xyz/posts/modern-data-lake-storage-layers/</link><pubDate>Wed, 02 Feb 2022 14:22:22 -0800</pubDate><guid>https://dacort.xyz/posts/modern-data-lake-storage-layers/</guid><description>&lt;p&gt;In recent years we&amp;rsquo;ve seen a rise in new storage layers for data lakes. In 2017, &lt;a href="https://eng.uber.com/hoodie/"&gt;Uber announced Hudi&lt;/a&gt; - an incremental processing framework for data pipelines. In 2018, &lt;a href="https://conferences.oreilly.com/strata/strata-ny-2018/public/schedule/detail/69503.html"&gt;Netflix introduced Iceberg&lt;/a&gt; - a new table format for managing extremely large cloud datasets. And in 2019, &lt;a href="https://techcrunch.com/2019/04/24/databricks-open-sources-delta-lake-to-make-data-lakes-more-reliable/"&gt;Databricks open-sourced Delta Lake&lt;/a&gt; - originally intended to bring ACID transactions to data lakes.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;📹 &lt;em&gt;If you&amp;rsquo;d like to watch a video that discusses the content of this post, I&amp;rsquo;ve also recorded &lt;a href="https://www.youtube.com/watch?v=fryfx0Zg7KA"&gt;an overview here&lt;/a&gt;. Each relevant section below will also link to individual timestamps.&lt;/em&gt;&lt;/p&gt;</description><content:encoded><![CDATA[<p>In recent years we&rsquo;ve seen a rise in new storage layers for data lakes. In 2017, <a href="https://eng.uber.com/hoodie/">Uber announced Hudi</a> - an incremental processing framework for data pipelines. In 2018, <a href="https://conferences.oreilly.com/strata/strata-ny-2018/public/schedule/detail/69503.html">Netflix introduced Iceberg</a> - a new table format for managing extremely large cloud datasets. And in 2019, <a href="https://techcrunch.com/2019/04/24/databricks-open-sources-delta-lake-to-make-data-lakes-more-reliable/">Databricks open-sourced Delta Lake</a> - originally intended to bring ACID transactions to data lakes.</p>
 <blockquote>
 <p>📹 <em>If you&rsquo;d like to watch a video that discusses the content of this post, I&rsquo;ve also recorded <a href="https://www.youtube.com/watch?v=fryfx0Zg7KA">an overview here</a>. Each relevant section below will also link to individual timestamps.</em></p>
 </blockquote>
@@ -400,8 +493,7 @@ Given the recent announcement of MSK Connect, I wanted to see if I could easily 
 </span></span><span style="display:flex;"><span>2022-01-28 06:03:49       1171 tmp/iceberg/data/creation_date=2015-01-01/00001-5-eab30115-a1d6-4918-abb4-a198ac12b262-00001.parquet
 </span></span><span style="display:flex;"><span>2022-01-28 06:03:50       1182 tmp/iceberg/data/creation_date=2015-01-02/00001-5-eab30115-a1d6-4918-abb4-a198ac12b262-00002.parquet
 </span></span></code></pre></div><p>There are a lot of moving pieces here, but the image from the Iceberg spec illustrates it quite well.</p>
-<p><img loading="lazy" src="iceberg-metadata.png" alt="Iceberg Metadata Diagram"  />
-</p>
+<p><img alt="Iceberg Metadata Diagram" loading="lazy" src="/posts/modern-data-lake-storage-layers/iceberg-metadata.png"></p>
 <p>Similar to Hudi, our data is written to Parquet files in each partition, although Hive-style partitioning is used by default. Hudi can also do this by setting the <a href="https://hudi.apache.org/docs/configurations/#hoodiedatasourcewritehive_style_partitioning"><code>hoodie.datasource.write.hive_style_partitioning </code></a> parameter.</p>
 <p>Different from Hudi, though, is the default usage of the data catalog to identify the current metadata file to use. That metadata file contains references to a list of manifest files to use to determine which data files compose the dataset for that particular version, also known as snapshots. As of <a href="https://hudi.apache.org/releases/release-0.7.0/#metadata-table">Hudi 0.7.0</a>, it also supports a metadata table to reduce the performance impact of file listings. The snapshot data also has quite a bit of additional information. Let&rsquo;s update our dataset then take a look at S3 again and the snapshot portion of the metadata file.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span>spark<span style="color:#f92672">.</span>sql(<span style="color:#e6db74">f</span><span style="color:#e6db74">&#34;UPDATE </span><span style="color:#e6db74">{</span>ICEBERG_TABLE_NAME<span style="color:#e6db74">}</span><span style="color:#e6db74"> SET creation_date = &#39;2022-01-11&#39; WHERE id = 100&#34;</span>)
@@ -715,8 +807,8 @@ Given the recent announcement of MSK Connect, I wanted to see if I could easily 
 <p>I bet you&rsquo;re surprised I haven&rsquo;t mentioned deletes or GDPR yet. Don&rsquo;t worry&hellip;I will. 😀 But first I just wanted to understand exactly how these different systems work.</p>
 <h2 id="wrapup">Wrapup</h2>
 <p>In this post, we reviewed the basics of Apache Hudi, Apache Iceberg, and Delta Lake - modern data lake storage layers. All these frameworks enable a set of functionality that optimize working with data in cloud-based object stores, albeit with slightly different approaches.</p>
-]]></content:encoded></item><item><title>SSH to EC2 Instances with Session Manager</title><link>https://dacort.xyz/posts/ssh-to-ec2-instances-with-session-manager/</link><pubDate>Wed, 29 Sep 2021 09:49:03 -0700</pubDate><guid>https://dacort.xyz/posts/ssh-to-ec2-instances-with-session-manager/</guid><description>I&amp;rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&amp;rsquo;s) so I&amp;rsquo;m really used to SSH&amp;rsquo;ing into hosts. More often than not, however, I&amp;rsquo;m working with AWS EC2 instances in a private subnet.
-If you&amp;rsquo;re not familiar with it AWS Systems Manager Session Manager is a pretty sweet feature that allows you to connect remotely to EC2 instances with the AWS CLI, without needing to open up ports for SSH or utilize a bastion host.</description><content:encoded><![CDATA[<p>I&rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&rsquo;s) so I&rsquo;m really used to SSH&rsquo;ing into hosts. More often than not, however, I&rsquo;m working with AWS EC2 instances in a private subnet.</p>
+]]></content:encoded></item><item><title>SSH to EC2 Instances with Session Manager</title><link>https://dacort.xyz/posts/ssh-to-ec2-instances-with-session-manager/</link><pubDate>Wed, 29 Sep 2021 09:49:03 -0700</pubDate><guid>https://dacort.xyz/posts/ssh-to-ec2-instances-with-session-manager/</guid><description>&lt;p&gt;I&amp;rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&amp;rsquo;s) so I&amp;rsquo;m really used to SSH&amp;rsquo;ing into hosts. More often than not, however, I&amp;rsquo;m working with AWS EC2 instances in a private subnet.&lt;/p&gt;
+&lt;p&gt;If you&amp;rsquo;re not familiar with it &lt;a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html"&gt;AWS Systems Manager Session Manager&lt;/a&gt; is a pretty sweet feature that allows you to connect remotely to EC2 instances with the AWS CLI, without needing to open up ports for SSH or utilize a bastion host.&lt;/p&gt;</description><content:encoded><![CDATA[<p>I&rsquo;m kind of an old-school sys admin (aka, managed NT4 in the 90&rsquo;s) so I&rsquo;m really used to SSH&rsquo;ing into hosts. More often than not, however, I&rsquo;m working with AWS EC2 instances in a private subnet.</p>
 <p>If you&rsquo;re not familiar with it <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager.html">AWS Systems Manager Session Manager</a> is a pretty sweet feature that allows you to connect remotely to EC2 instances with the AWS CLI, without needing to open up ports for SSH or utilize a bastion host.</p>
 <p>I&rsquo;ve been using it in my browser occasionally, which is pretty handy, but I wanted to use it from my terminal. It required a couple steps to get working.</p>
 <h2 id="set-up-session-manager-with-aws-cli">Set up Session Manager with AWS CLI</h2>
@@ -739,16 +831,15 @@ If you&amp;rsquo;re not familiar with it AWS Systems Manager Session Manager is 
 <p><em>You may need to specify the region your instance is in</em></p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws ssm start-session --target i-abcdefgh123456789 --region us-west-2
 </span></span></code></pre></div><p>Awesome! You&rsquo;re good to go!</p>
-<p><img loading="lazy" src="session-output.png" alt="Session Output"  />
-</p>
+<p><img alt="Session Output" loading="lazy" src="/posts/ssh-to-ec2-instances-with-session-manager/session-output.png"></p>
 <h2 id="enable-logging">Enable Logging</h2>
 <p>The other nice thing if your memory is as bad as mine (or you want auditing, which is a more legitimate reason), you can also enable logging of your sessions to S3 or CloudWatch.</p>
 <p>This is what the default config looks like:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws ssm get-document <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --region us-west-2 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --name <span style="color:#e6db74">&#34;SSM-SessionManagerRunShell&#34;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --document-version <span style="color:#e6db74">&#34;\$LATEST&#34;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    | jq <span style="color:#e6db74">&#39;.Content | fromjson&#39;</span>
+</span></span></span><span style="display:flex;"><span>    --region us-west-2 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --name <span style="color:#e6db74">&#34;SSM-SessionManagerRunShell&#34;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --document-version <span style="color:#e6db74">&#34;\$LATEST&#34;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    | jq <span style="color:#e6db74">&#39;.Content | fromjson&#39;</span>
 </span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
 </span></span><span style="display:flex;"><span>  <span style="color:#f92672">&#34;schemaVersion&#34;</span>: <span style="color:#e6db74">&#34;1.0&#34;</span>,
 </span></span><span style="display:flex;"><span>  <span style="color:#f92672">&#34;description&#34;</span>: <span style="color:#e6db74">&#34;Document to hold regional settings for Session Manager&#34;</span>,
@@ -779,10 +870,10 @@ If you&amp;rsquo;re not familiar with it AWS Systems Manager Session Manager is 
 </span></span><span style="display:flex;"><span>PREFIX<span style="color:#f92672">=</span>logs/session_manager/
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>aws ssm update-document <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --region us-west-2 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --name <span style="color:#e6db74">&#34;SSM-SessionManagerRunShell&#34;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --document-version <span style="color:#e6db74">&#34;\$LATEST&#34;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --content <span style="color:#e6db74">&#39;{
+</span></span></span><span style="display:flex;"><span>    --region us-west-2 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --name <span style="color:#e6db74">&#34;SSM-SessionManagerRunShell&#34;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --document-version <span style="color:#e6db74">&#34;\$LATEST&#34;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --content <span style="color:#e6db74">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  &#34;schemaVersion&#34;: &#34;1.0&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  &#34;description&#34;: &#34;Document to hold regional settings for Session Manager&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">  &#34;sessionType&#34;: &#34;Standard_Stream&#34;,
@@ -815,13 +906,13 @@ If you&amp;rsquo;re not familiar with it AWS Systems Manager Session Manager is 
 </span></span></code></pre></div><pre tabindex="0"><code>2021-09-29 10:21:24       4177 your-aws-username-abcdefgh123456789.log
 </code></pre><p>And that log file will have the full contents of your session.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws s3 cp s3://&lt;BUCKET_NAME&gt;/logs/session_manager/your-aws-username-abcdefgh123456789.log -
-</span></span></code></pre></div><p><img loading="lazy" src="log-output.png" alt="SSM Log Output"  />
-</p>
+</span></span></code></pre></div><p><img alt="SSM Log Output" loading="lazy" src="/posts/ssh-to-ec2-instances-with-session-manager/log-output.png"></p>
 <p>And yes, the <em>FULL CONTENTS</em>. So if you enter a password or sensitive info, you should follow the steps <a href="https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-logging.html">here</a>.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>stty -echo; read passwd; stty echo;
-</span></span></code></pre></div>]]></content:encoded></item><item><title>Updating Partition Values With Apache Hudi</title><link>https://dacort.xyz/posts/updating-partition-values-with-apache-hudi/</link><pubDate>Thu, 23 Sep 2021 11:51:57 -0700</pubDate><guid>https://dacort.xyz/posts/updating-partition-values-with-apache-hudi/</guid><description>If you&amp;rsquo;re not familiar with Apache Hudi, it&amp;rsquo;s a pretty awesome piece of software that brings transactions and record-level updates/deletes to data lakes.
-More specifically, if you&amp;rsquo;re doing Analytics with S3, Hudi provides a way for you to consistently update records in your data lake, which historically has been pretty challenging. It can also optimize file sizes, allow for rollbacks, and makes streaming CDC data impressively easy.
-Updating Partition Values I&amp;rsquo;m learning more about Hudi and was following this EMR guide to working with a Hudi dataset, but the &amp;ldquo;Upsert&amp;rdquo; operation didn&amp;rsquo;t quite work as I expected.</description><content:encoded><![CDATA[<p>If you&rsquo;re not familiar with <a href="https://hudi.apache.org/">Apache Hudi</a>, it&rsquo;s a pretty awesome piece of software that brings transactions and record-level updates/deletes to data lakes.</p>
+</span></span></code></pre></div>]]></content:encoded></item><item><title>Updating Partition Values With Apache Hudi</title><link>https://dacort.xyz/posts/updating-partition-values-with-apache-hudi/</link><pubDate>Thu, 23 Sep 2021 11:51:57 -0700</pubDate><guid>https://dacort.xyz/posts/updating-partition-values-with-apache-hudi/</guid><description>&lt;p&gt;If you&amp;rsquo;re not familiar with &lt;a href="https://hudi.apache.org/"&gt;Apache Hudi&lt;/a&gt;, it&amp;rsquo;s a pretty awesome piece of software that brings transactions and record-level updates/deletes to data lakes.&lt;/p&gt;
+&lt;p&gt;More specifically, if you&amp;rsquo;re doing Analytics with S3, Hudi provides a way for you to &lt;em&gt;consistently&lt;/em&gt; update records in your data lake, which historically has been pretty challenging. It can also optimize file sizes, allow for rollbacks, and makes &lt;a href="https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-available-in-amazon-emr/"&gt;streaming CDC data impressively easy&lt;/a&gt;.&lt;/p&gt;
+&lt;h2 id="updating-partition-values"&gt;Updating Partition Values&lt;/h2&gt;
+&lt;p&gt;I&amp;rsquo;m learning more about Hudi and was following this &lt;a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-work-with-dataset.html"&gt;EMR guide to working with a Hudi dataset&lt;/a&gt;, but the &amp;ldquo;Upsert&amp;rdquo; operation didn&amp;rsquo;t quite work as I expected. Instead of overwriting the desired record, it added a second one with the same ID. 🤔&lt;/p&gt;</description><content:encoded><![CDATA[<p>If you&rsquo;re not familiar with <a href="https://hudi.apache.org/">Apache Hudi</a>, it&rsquo;s a pretty awesome piece of software that brings transactions and record-level updates/deletes to data lakes.</p>
 <p>More specifically, if you&rsquo;re doing Analytics with S3, Hudi provides a way for you to <em>consistently</em> update records in your data lake, which historically has been pretty challenging. It can also optimize file sizes, allow for rollbacks, and makes <a href="https://aws.amazon.com/blogs/big-data/new-features-from-apache-hudi-available-in-amazon-emr/">streaming CDC data impressively easy</a>.</p>
 <h2 id="updating-partition-values">Updating Partition Values</h2>
 <p>I&rsquo;m learning more about Hudi and was following this <a href="https://docs.aws.amazon.com/emr/latest/ReleaseGuide/emr-hudi-work-with-dataset.html">EMR guide to working with a Hudi dataset</a>, but the &ldquo;Upsert&rdquo; operation didn&rsquo;t quite work as I expected. Instead of overwriting the desired record, it added a second one with the same ID. 🤔</p>
@@ -895,19 +986,18 @@ Updating Partition Values I&amp;rsquo;m learning more about Hudi and was followi
 </span></span></code></pre></div><h3 id="athena-compatibility">Athena Compatibility</h3>
 <p>We can also successfully query this dataset from Athena and see the updated data as well!</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-sql" data-lang="sql"><span style="display:flex;"><span><span style="color:#66d9ef">SELECT</span> <span style="color:#f92672">*</span> <span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">&#34;default&#34;</span>.<span style="color:#e6db74">&#34;my_hudi_table&#34;</span> 
-</span></span></code></pre></div><p><img loading="lazy" src="athena-results.png" alt="Athena Results"  />
-</p>
+</span></span></code></pre></div><p><img alt="Athena Results" loading="lazy" src="/posts/updating-partition-values-with-apache-hudi/athena-results.png"></p>
 <p><em>Note the the different <code>_hoodie_file_name</code> for record id <code>100</code>.</em></p>
 <p>Awesome! Now that I understand what&rsquo;s going on, it makes perfect sense. 🙌</p>
-]]></content:encoded></item><item><title>Continuous Deployment of Jupyter Notebooks</title><link>https://dacort.xyz/posts/continuous-deployment-of-jupyter-notebooks/</link><pubDate>Wed, 14 Jul 2021 16:00:00 -0700</pubDate><guid>https://dacort.xyz/posts/continuous-deployment-of-jupyter-notebooks/</guid><description>This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.
-Overview Since I started using EMR Studio, I&amp;rsquo;ve been making more use of Jupyter notebooks as scratch pads and often want to be able to easily share the results of my research. I hunted around for a few different solutions and while there are some good ones like nbconvert and jupytext, I wanted something a bit simpler and off-the-shelf.</description><content:encoded><![CDATA[<p>This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.</p>
+]]></content:encoded></item><item><title>Continuous Deployment of Jupyter Notebooks</title><link>https://dacort.xyz/posts/continuous-deployment-of-jupyter-notebooks/</link><pubDate>Wed, 14 Jul 2021 16:00:00 -0700</pubDate><guid>https://dacort.xyz/posts/continuous-deployment-of-jupyter-notebooks/</guid><description>&lt;p&gt;This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.&lt;/p&gt;
+&lt;h2 id="overview"&gt;Overview&lt;/h2&gt;
+&lt;p&gt;Since I started using &lt;a href="https://aws.amazon.com/emr/features/studio/"&gt;EMR Studio&lt;/a&gt;, I&amp;rsquo;ve been making more use of Jupyter notebooks as scratch pads and often want to be able to easily share the results of my research. I hunted around for a few different solutions and while there are some good ones like &lt;a href="https://nbconvert.readthedocs.io/en/latest/"&gt;nbconvert&lt;/a&gt; and &lt;a href="https://github.com/mwouts/jupytext/"&gt;jupytext&lt;/a&gt;, I wanted something a bit simpler and off-the-shelf. This post from &lt;a href="https://www.linkedin.com/in/mikkelhartmann/"&gt;Mikkel Hartmann&lt;/a&gt; about &lt;a href="http://mikkelhartmann.dk/2019/05/14/static-website-from-jupyter-notebooks.html"&gt;making a static website from Jupyter Notebooks&lt;/a&gt; led me to &lt;a href="https://www.mkdocs.org/"&gt;MkDocs&lt;/a&gt; and luckily, I came across &lt;a href="https://github.com/greenape/mknotebooks"&gt;mknotebooks&lt;/a&gt;, which offers a simple plugin for MkDocs. 😅&lt;/p&gt;</description><content:encoded><![CDATA[<p>This is a guide on how to use AWS CodePipeline to continuously deploy Jupyter notebooks to an S3-backed static website.</p>
 <h2 id="overview">Overview</h2>
 <p>Since I started using <a href="https://aws.amazon.com/emr/features/studio/">EMR Studio</a>, I&rsquo;ve been making more use of Jupyter notebooks as scratch pads and often want to be able to easily share the results of my research. I hunted around for a few different solutions and while there are some good ones like <a href="https://nbconvert.readthedocs.io/en/latest/">nbconvert</a> and <a href="https://github.com/mwouts/jupytext/">jupytext</a>, I wanted something a bit simpler and off-the-shelf. This post from <a href="https://www.linkedin.com/in/mikkelhartmann/">Mikkel Hartmann</a> about <a href="http://mikkelhartmann.dk/2019/05/14/static-website-from-jupyter-notebooks.html">making a static website from Jupyter Notebooks</a> led me to <a href="https://www.mkdocs.org/">MkDocs</a> and luckily, I came across <a href="https://github.com/greenape/mknotebooks">mknotebooks</a>, which offers a simple plugin for MkDocs. 😅</p>
 <p>So, by using a simple static site generator that&rsquo;s geared toward project documentation, and a plugin that renders Jupyter notebooks quite well, and a few fancy code pipelines&hellip;I can easily push my notebooks to production. Let&rsquo;s go!</p>
 <h2 id="architecture">Architecture</h2>
 <p>This is the architecture we&rsquo;ll be implementing. This will all be built using the <a href="https://aws.amazon.com/cdk/">AWS Cloud Development Kit</a> (CDK).</p>
-<p><img loading="lazy" src="jupyter_notebook_cd_architecture.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/continuous-deployment-of-jupyter-notebooks/jupyter_notebook_cd_architecture.png"></p>
 <p>We&rsquo;ll be creating the following:</p>
 <ul>
 <li>2 S3 buckets to store our logs and website artifacts</li>
@@ -947,8 +1037,8 @@ Overview Since I started using EMR Studio, I&amp;rsquo;ve been making more use o
 <p><em>If you are not using a custom domain, you can omit both of the <code>-c</code> options below.</em></p>
 <p>If you want to deploy to a different region, make sure you set the <code>AWS_DEFAULT_REGION</code> environment variable.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>cdk deploy EmrStudioPublisherStack <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -c domain_name<span style="color:#f92672">=</span>notebooks.example.com <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -c certificate_arn<span style="color:#f92672">=</span>arn:aws:acm:us-east-1:012345678912:certificate/f07b01a4-3e8c-4639-8a22-b7a20a832de3
+</span></span></span><span style="display:flex;"><span>    -c domain_name<span style="color:#f92672">=</span>notebooks.example.com <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    -c certificate_arn<span style="color:#f92672">=</span>arn:aws:acm:us-east-1:012345678912:certificate/f07b01a4-3e8c-4639-8a22-b7a20a832de3
 </span></span></code></pre></div><p>Once this stack finishes, you should have a CodeCommit repository you can make changes to, a CloudFront distribution, and a publicly accessible URL (found in the <code>EmrStudioPublisherStack.cloudfrontendpoint</code> output) that has a pre-populated example site.</p>
 <p>The site will take a few minutes to deploy - you&rsquo;ll be able to keep an eye on the status in the <a href="https://console.aws.amazon.com/codesuite/codepipeline/pipelines">CodePipeline console</a>.</p>
 <h2 id="usage">Usage</h2>
@@ -962,15 +1052,13 @@ Overview Since I started using EMR Studio, I&amp;rsquo;ve been making more use o
 </span></span><span style="display:flex;"><span>    - <span style="color:#f92672">Oura Sleep Analysis</span>: <span style="color:#ae81ff">notebooks/damons_sleep.ipynb</span>
 </span></span><span style="display:flex;"><span>    - <span style="color:#f92672">Intro to Data Processing on AWS</span>: <span style="color:#ae81ff">notebooks/intro_data_processing_aws.ipynb</span>
 </span></span></code></pre></div><p>This YAML config will generate a nav dropdown like so.</p>
-<p><img loading="lazy" src="nav_dropdown.png" alt="Navigation example"  />
-</p>
+<p><img alt="Navigation example" loading="lazy" src="/posts/continuous-deployment-of-jupyter-notebooks/nav_dropdown.png"></p>
 <h3 id="advanced-usage">Advanced Usage</h3>
 <p>Note that not <em>all</em> images or libraries render nicely when converting to HTML. This is why, for example, in my plotly example I had to use <code>fig.show(renderer=&quot;jupyterlab&quot;)</code></p>
 <p>In addition, if you paste multiple images into your notebook&rsquo;s Markdown, mknotebooks <a href="https://github.com/greenape/mknotebooks/issues/466">only renders one of them</a>. In order to work around this, I added a pre-build step that uniquify&rsquo;s all the image attachments in Markdown cells.</p>
-]]></content:encoded></item><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.
-Overview Before you get started, it&amp;rsquo;s good to have an understanding of the different components of an Airflow task.</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
-<p><img loading="lazy" src="cloc.png" alt=""  />
-</p>
+]]></content:encoded></item><item><title>Building and Testing a new Apache Airflow Plugin</title><link>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</link><pubDate>Fri, 09 Jul 2021 11:30:00 -0700</pubDate><guid>https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/</guid><description>&lt;p&gt;Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&amp;rsquo;ve been a consumer of Airflow over the years, I&amp;rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&amp;rsquo;s a guide on how I made a new operator in the AWS provider package.&lt;/p&gt;
+&lt;p&gt;&lt;img loading="lazy" src="https://dacort.xyz/posts/building-and-testing-a-new-apache-airflow-plugin/cloc.png"&gt;&lt;/p&gt;</description><content:encoded><![CDATA[<p>Recently, I had the opportunity to add a new EMR on EKS plugin to Apache Airflow. While I&rsquo;ve been a consumer of Airflow over the years, I&rsquo;ve never contributed directly to the project. And weighing in at over half a million lines of code, Airflow is a pretty complex project to wade into. So here&rsquo;s a guide on how I made a new operator in the AWS provider package.</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/cloc.png"></p>
 <h2 id="overview">Overview</h2>
 <p>Before you get started, it&rsquo;s good to have an understanding of the different components of an Airflow task. The <a href="https://airflow.apache.org/docs/apache-airflow/stable/concepts/tasks.html">Airflow Tasks documentation</a> covers two of the important aspects:</p>
 <ul>
@@ -991,14 +1079,12 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <p><em>The official Airflow docs on <a href="http://airflow.apache.org/docs/apache-airflow-providers/howto/create-update-providers.html">Community Providers</a> are also very helpful.</em></p>
 <h2 id="creating-your-new-operator">Creating your new operator</h2>
 <p>All provider packages live in the <a href="https://github.com/apache/airflow/tree/main/airflow/providers"><code>airflow/providers</code></a> subtree of the git repository.</p>
-<p><img loading="lazy" src="provider_listing.png" alt="List of providers"  />
-</p>
+<p><img alt="List of providers" loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/provider_listing.png"></p>
 <p>If you look in each provider directory, you&rsquo;ll see various directories including <code>hooks</code>, <code>operators</code>, and <code>sensors</code>. These provide some good examples of how to create your Operator.</p>
 <p>For now, I&rsquo;m going to create a new <code>emr_containers.py</code> file in each of the <code>hooks</code>, <code>operators</code>, and <code>sensors</code> directories. We&rsquo;ll be creating a new Hook for connecting to the <a href="https://docs.aws.amazon.com/emr-on-eks/latest/APIReference/Welcome.html">EMR on EKS API</a>, a new Sensor for waiting on jobs to complete, and an Operator that can be used to trigger your EMR on EKS jobs.</p>
 <p>I won&rsquo;t go over the implementation details here, but you can take a look at each file in the Airflow repository.</p>
 <p>One thing that was confusing to me during this process is that all three of those files have the same name&hellip;so at a glance, it was tough for me to know which component I was editing. But if you can keep this diagram in your head, it&rsquo;s pretty helpful.</p>
-<p><img loading="lazy" src="emr_containers_workflow.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/emr_containers_workflow.png"></p>
 <p>Note that there is no <code>EMRContainerSensor</code> in this workflow - that&rsquo;s because the default operator handles polling/waiting for the job to complete itself.</p>
 <h2 id="testing">Testing</h2>
 <p>Similar to the provider packages, tests for the provider packages live in the <a href="https://github.com/apache/airflow/tree/main/tests/providers"><code>tests/providers</code></a> subtree.</p>
@@ -1027,13 +1113,11 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>./breeze prepare-provider-packages amazon -S dev
 </span></span><span style="display:flex;"><span>./breeze start-airflow --use-airflow-version wheel --use-packages-from-dist
 </span></span></code></pre></div><p>If you run <code>breeze</code> without the <code>start-airflow</code>, you&rsquo;ll just get dropped into a bash prompt and need to start the webserver and scheduler manually. I recommend just letting Breeze take care of that.</p>
-<p><img loading="lazy" src="breeze_shell.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/breeze_shell.png"></p>
 <p>Once in the shell, you may need to create a user to be able to login to the Airflow UI.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>airflow users create --role Admin --username admin --password admin --email admin@example.com --firstname foo --lastname bar
 </span></span></code></pre></div><p>By default, port 28080 gets forward to Airflow so you should be able to browse to <a href="http://localhost:28080">http://localhost:28080</a> and login as <code>admin</code>/<code>admin</code>.</p>
-<p><img loading="lazy" src="airflow_dag_ui.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/airflow_dag_ui.png"></p>
 <h3 id="run-your-example-dag">Run your example DAG</h3>
 <p>In theory, you can Unpause your DAG in the UI and run it, but it&rsquo;s likely you need some environment variables.</p>
 <p>With AWS, you&rsquo;ll need to define access credentials and region. You can create a new Connection to do this, or just do so in your Airflow shell.</p>
@@ -1045,11 +1129,10 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span></code></pre></div><p>Next, we&rsquo;ll try to run our example DAG using <code>airflow dags test</code>!</p>
 <p>Our script requires the EMR on EKS virtual cluster ID and job role ARN, so we&rsquo;ll supply those as environment variables.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>VIRTUAL_CLUSTER_ID<span style="color:#f92672">=</span>abcdefghijklmno0123456789 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
+</span></span></span><span style="display:flex;"><span>JOB_ROLE_ARN<span style="color:#f92672">=</span>arn:aws:iam::111122223333:role/emr_eks_default_role <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>airflow dags test emr_eks_pi_job <span style="color:#66d9ef">$(</span>date -Is<span style="color:#66d9ef">)</span>
 </span></span></code></pre></div><p>You should see the job spin up and display logs in your console.</p>
-<p><img loading="lazy" src="emr_eks_dag_run.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/emr_eks_dag_run.png"></p>
 <p>And if you refresh the Airflow UI you should see a successful run! If not&hellip;it&rsquo;s time to debug.</p>
 <h2 id="documentation">Documentation</h2>
 <p>OK! So&hellip;you&rsquo;ve built your new Operator. You&rsquo;ve written (and run) all your tests. Now it&rsquo;s time to help other folks use it!</p>
@@ -1063,12 +1146,11 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span><span style="display:flex;"><span><span style="color:#75715e"># [END howto_operator_emr_eks_env_variables]</span>
 </span></span></code></pre></div><p>Note the <code>START</code> and <code>END</code> blocks. With those in there, I can include that snippet in my docs like so:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-rest" data-lang="rest"><span style="display:flex;"><span>.. <span style="color:#f92672">exampleinclude</span>:: /../../airflow/providers/amazon/aws/example_dags/example_emr_eks_job.py<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:language:</span> <span style="color:#a6e22e">python</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:start-after:</span> <span style="color:#a6e22e">[START howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span>    <span style="color:#a6e22e">:end-before:</span> <span style="color:#a6e22e">[END howto_operator_emr_eks_env_variables]</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span></code></pre></div><p>And then it&rsquo;ll show up in the docs like this - pretty sweet!</p>
-<p><img loading="lazy" src="docs_import.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/building-and-testing-a-new-apache-airflow-plugin/docs_import.png"></p>
 <h3 id="provideryaml"><code>provider.yaml</code></h3>
 <p>If you want your new Operator linked in the official provider docs, make sure to also update <code>provider.yaml</code> in the relevant provider.</p>
 <h2 id="merging">Merging</h2>
@@ -1089,9 +1171,10 @@ Overview Before you get started, it&amp;rsquo;s good to have an understanding of
 </span></span></code></pre></div><p>That said, I&rsquo;m <em>very</em> happy there are so many checks in this project. There are a lot of things I didn&rsquo;t know about until the checks ran (like the <code>spelling_wordlist.txt</code> file) and it&rsquo;s great to have such a high level of automation to help contributors maintain the quality of their code.</p>
 <h2 id="wrapup">Wrapup</h2>
 <p>I want to send a quick shoutout to the folks in the <a href="https://apache-airflow-slack.herokuapp.com/">Airflow Slack community</a> - they&rsquo;re all super nice and welcoming. And especially the folks that reviewed my PR, who were kind enough to not make <em>too</em> much of my <code>BEEP BOOP</code> error message I had committed with my initial revision. 🤖 😆</p>
-]]></content:encoded></item><item><title>Build your own Air Quality Monitor with OpenAQ and EMR on EKS</title><link>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</link><pubDate>Thu, 24 Jun 2021 21:20:00 +0000</pubDate><guid>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</guid><description>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.
-With Amazon EMR on EKS, you can now customize and package your own Apache Spark dependencies and I use that functionality for this post.
-Overview OpenAQ maintains a publicly accessible dataset of various air quality metrics that&amp;rsquo;s updated every half hour.</description><content:encoded><![CDATA[<p>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.</p>
+]]></content:encoded></item><item><title>Build your own Air Quality Monitor with OpenAQ and EMR on EKS</title><link>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</link><pubDate>Thu, 24 Jun 2021 21:20:00 +0000</pubDate><guid>https://dacort.xyz/posts/emr-eks-custom-images-with-openaq/</guid><description>&lt;p&gt;Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.&lt;/p&gt;
+&lt;p&gt;With Amazon EMR on EKS, you can now &lt;a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/"&gt;customize and package your own Apache Spark dependencies&lt;/a&gt; and I use that functionality for this post.&lt;/p&gt;
+&lt;h2 id="overview"&gt;Overview&lt;/h2&gt;
+&lt;p&gt;OpenAQ maintains a &lt;a href="https://registry.opendata.aws/openaq/"&gt;publicly accessible dataset of various air quality metrics&lt;/a&gt; that&amp;rsquo;s updated every half hour. &lt;a href="https://docs.bokeh.org/en/latest/index.html"&gt;Bokeh&lt;/a&gt; is a popular library for Python data visualization. While it includes sample data for US county and state boundaries, we&amp;rsquo;re going to use &lt;a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html"&gt;shapefiles from census.gov&lt;/a&gt;.&lt;/p&gt;</description><content:encoded><![CDATA[<p>Fire season is closely approaching and as somebody that spent two weeks last year hunkered down inside with my browser glued to various air quality sites, I wanted to show how to use data from OpenAQ to build your own air quality analysis.</p>
 <p>With Amazon EMR on EKS, you can now <a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/">customize and package your own Apache Spark dependencies</a> and I use that functionality for this post.</p>
 <h2 id="overview">Overview</h2>
 <p>OpenAQ maintains a <a href="https://registry.opendata.aws/openaq/">publicly accessible dataset of various air quality metrics</a> that&rsquo;s updated every half hour. <a href="https://docs.bokeh.org/en/latest/index.html">Bokeh</a> is a popular library for Python data visualization. While it includes sample data for US county and state boundaries, we&rsquo;re going to use <a href="https://www.census.gov/geographies/mapping-files/time-series/geo/cartographic-boundary.html">shapefiles from census.gov</a>.</p>
@@ -1108,48 +1191,48 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 <h3 id="download-the-emr-base-image">Download the EMR base image</h3>
 <p>For this post, we&rsquo;ll be using the <code>us-west-2</code> region and EMR 6.3.0 release. Each region and release has a different base image URL, and you can find the full list <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/docker-custom-images-tag.html">here</a>.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws ecr get-login-password --region us-west-2 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    | docker login --username AWS --password-stdin 895885662937.dkr.ecr.us-west-2.amazonaws.com
+</span></span></span><span style="display:flex;"><span>    | docker login --username AWS --password-stdin 895885662937.dkr.ecr.us-west-2.amazonaws.com
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>docker pull 895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest
 </span></span></code></pre></div><h3 id="customize-the-image">Customize the image</h3>
 <p>EMR on EKS comes with a variety of <a href="https://docs.aws.amazon.com/emr/latest/ManagementGuide/emr-studio-install-libraries-and-kernels.html">default libraries</a> installed including plotly and seaborn, but we wanted to try out Bokeh for my illustration as they have a great <a href="https://docs.bokeh.org/en/latest/docs/gallery/texas.html">choropleth example</a> and it&rsquo;s a library I&rsquo;ve been hearing about occasionally. I was hoping to use Bokeh&rsquo;s <code>sampledata</code> for US and county, but I ended up using <a href="https://geopandas.org/">GeoPandas</a> to re-project my map to a conic projection so Michigan wasn&rsquo;t squashed up against Wisconsin. :) GeoPandas makes it easy to read in shapefiles, so I just used the census.gov provided state and county data.</p>
 <p>Bokeh also uses Selenium and Chrome for it&rsquo;s static image generation, so we go ahead and install Chrome on the container image as well.</p>
-<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-dockerfile" data-lang="dockerfile"><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span><span style="color:#e6db74"> 895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest</span><span style="color:#960050;background-color:#1e0010">
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-dockerfile" data-lang="dockerfile"><span style="display:flex;"><span><span style="color:#66d9ef">FROM</span> <span style="color:#e6db74">895885662937.dkr.ecr.us-west-2.amazonaws.com/notebook-spark/emr-6.3.0:latest</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">USER</span><span style="color:#e6db74"> root</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">USER</span> <span style="color:#e6db74">root</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Install Chrome</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> curl https://intoli.com/install-google-chrome.sh | bash <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    mv /usr/bin/google-chrome-stable /usr/bin/chrome<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># Install Chrome</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> curl https://intoli.com/install-google-chrome.sh | bash <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    mv /usr/bin/google-chrome-stable /usr/bin/chrome<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># We need to upgrade pip in order to install pyproj</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip3 install --upgrade pip<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># We need to upgrade pip in order to install pyproj</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> pip3 install --upgrade pip<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># If you pip install as root, use this</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> pip3 install <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    bokeh<span style="color:#f92672">==</span>2.3.2 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    boto3<span style="color:#f92672">==</span>1.17.93 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    chromedriver-py<span style="color:#f92672">==</span>91.0.4472.19.0 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    geopandas<span style="color:#f92672">==</span>0.9.0 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    selenium<span style="color:#f92672">==</span>3.141.0 <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    shapely<span style="color:#f92672">==</span>1.7.1<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># If you pip install as root, use this</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> pip3 install <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    bokeh<span style="color:#f92672">==</span>2.3.2 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    boto3<span style="color:#f92672">==</span>1.17.93 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    chromedriver-py<span style="color:#f92672">==</span>91.0.4472.19.0 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    geopandas<span style="color:#f92672">==</span>0.9.0 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    selenium<span style="color:#f92672">==</span>3.141.0 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    shapely<span style="color:#f92672">==</span>1.7.1<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> ln -s /usr/local/lib/python3.7/site-packages/chromedriver_py/chromedriver_linux64 /usr/local/bin/chromedriver<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> ln -s /usr/local/lib/python3.7/site-packages/chromedriver_py/chromedriver_linux64 /usr/local/bin/chromedriver<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Install bokeh sample data to /usr/local/share</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> mkdir /root/.bokeh <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    echo <span style="color:#e6db74">&#34;sampledata_dir: /usr/local/share/bokeh&#34;</span> &gt; /root/.bokeh/config <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    bokeh sampledata<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># Install bokeh sample data to /usr/local/share</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> mkdir /root/.bokeh <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    echo <span style="color:#e6db74">&#34;sampledata_dir: /usr/local/share/bokeh&#34;</span> &gt; /root/.bokeh/config <span style="color:#f92672">&amp;&amp;</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    bokeh sampledata<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># Also install census data into the image :)</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_state_500k.zip  /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_500k.zip /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">RUN</span> chmod <span style="color:#ae81ff">644</span> /usr/local/share/bokeh/cb*.zip<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># Also install census data into the image :)</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_state_500k.zip  /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">ADD</span> https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_500k.zip /usr/local/share/bokeh/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">RUN</span> chmod <span style="color:#ae81ff">644</span> /usr/local/share/bokeh/cb*.zip<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#75715e"># This is a simple test to make sure generating the image works properly</span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">COPY</span> test /test/<span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#75715e"># This is a simple test to make sure generating the image works properly</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">COPY</span> test /test/<span style="color:#960050;background-color:#1e0010">
 </span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010">
-</span></span></span><span style="display:flex;"><span><span style="color:#960050;background-color:#1e0010"></span><span style="color:#66d9ef">USER</span><span style="color:#e6db74"> hadoop:hadoop</span><span style="color:#960050;background-color:#1e0010">
+</span></span></span><span style="display:flex;"><span><span style="color:#66d9ef">USER</span> <span style="color:#e6db74">hadoop:hadoop</span><span style="color:#960050;background-color:#1e0010">
 </span></span></span></code></pre></div><h3 id="build-and-push">Build and push</h3>
 <p>Great, we&rsquo;ve customized our image – now we just need to build and push it to a container registery somewhere! For this post, I chose GitHub but you can use any container registry like ECR or DockerHub.</p>
 <p><em>The below commands assume you have a GitHub Personal Access Token that has access to push images in the <code>CR_PAT</code> environment variable.</em></p>
@@ -1163,10 +1246,10 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 <h2 id="code-walkthrough">Code walkthrough</h2>
 <p>If you already built your image, you can run the below code locally. In order to access S3 data, you&rsquo;ll have to set your <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_KEY_ID</code> environment variables.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>docker run --rm -it --name airq-demo <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -e AWS_ACCESS_KEY_ID <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    -e AWS_SECRET_ACCESS_KEY <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    emr-6.3.0-bokeh <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    pyspark --deploy-mode client --master <span style="color:#e6db74">&#39;local[1]&#39;</span>
+</span></span></span><span style="display:flex;"><span>    -e AWS_ACCESS_KEY_ID <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    -e AWS_SECRET_ACCESS_KEY <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    emr-6.3.0-bokeh <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    pyspark --deploy-mode client --master <span style="color:#e6db74">&#39;local[1]&#39;</span>
 </span></span></code></pre></div><h3 id="reading-and-filtering-openaq-data">Reading and filtering OpenAQ Data</h3>
 <p>The first thing we need to do is read the the data for today&rsquo;s date into a Spark dataframe.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">import</span> datetime
@@ -1398,8 +1481,7 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 </span></span></code></pre></div><p>Now, if you&rsquo;re running on a mac, you can just copy the generated map to your local system and open it up!</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>docker cp airq-demo:/home/hadoop/map.png .
 </span></span><span style="display:flex;"><span>open map.png
-</span></span></code></pre></div><p><img loading="lazy" src="/images/posts-airq-map.png" alt="Air Quality map"  />
-</p>
+</span></span></code></pre></div><p><img alt="Air Quality map" loading="lazy" src="/images/posts-airq-map.png"></p>
 <h3 id="running-on-emr-on-eks">Running on EMR on EKS</h3>
 <p>I&rsquo;ve bundled this all up into a pyspark script in my <code>demo-code</code> repo.</p>
 <p>This demo assumes you already have an EMR on EKS virtual cluster up and running, you&rsquo;ve built the image in the first part and pushed it to a container registry, and the IAM Role you use to run the job has access to both read and write to an S3 bucket.</p>
@@ -1421,18 +1503,18 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 </span></span><span style="display:flex;"><span>export EMR_EKS_EXECUTION_ARN<span style="color:#f92672">=</span>arn:aws:iam::123456789012:role/emr_eks_default_role
 </span></span></code></pre></div><div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span><span style="color:#75715e"># Replace ghcr.io/OWNER/emr-6.3.0-bokeh:latest below with your image URL</span>
 </span></span><span style="display:flex;"><span>aws emr-containers start-job-run <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --name openaq-conus <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --job-driver <span style="color:#e6db74">&#39;{
+</span></span></span><span style="display:flex;"><span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --name openaq-conus <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --job-driver <span style="color:#e6db74">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        &#34;sparkSubmitJobDriver&#34;: {
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;entryPoint&#34;: &#34;s3://&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;/code/generate_aqi_map.py&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;entryPointArguments&#34;: [&#34;&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;&#34;, &#34;output/airq/&#34;],
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;sparkSubmitParameters&#34;: &#34;--conf spark.kubernetes.container.image=ghcr.io/OWNER/emr-6.3.0-bokeh:latest&#34;
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        }
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">    }&#39;</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --configuration-overrides <span style="color:#e6db74">&#39;{
+</span></span></span><span style="display:flex;"><span>    --configuration-overrides <span style="color:#e6db74">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        &#34;monitoringConfiguration&#34;: {
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;s3MonitoringConfiguration&#34;: { &#34;logUri&#34;: &#34;s3://&#39;</span><span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span><span style="color:#e6db74">&#39;/logs/&#34; }
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        }
@@ -1445,30 +1527,31 @@ Overview OpenAQ maintains a publicly accessible dataset of various air quality m
 </span></span><span style="display:flex;"><span>}
 </span></span></code></pre></div><p>While the job is running, you can get the fetch the status of the job using the <code>emr-containers describe-job-run</code> command.</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws emr-containers describe-job-run <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --id 0000000abcdefg12345
+</span></span></span><span style="display:flex;"><span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --id 0000000abcdefg12345
 </span></span></code></pre></div><p>Once the job is in the <code>COMPLETED</code> state, you should be able to copy the resulting image from your S3 bucket!</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>aws s3 cp s3://<span style="color:#e6db74">${</span>S3_BUCKET<span style="color:#e6db74">}</span>/output/airq/2021-06-24-latest.png .
 </span></span></code></pre></div><p>And if you open that file, you&rsquo;ll get the most recent PM2.5 readings!</p>
-<p><img loading="lazy" src="/images/posts-airq-map.png" alt="Air Quality map"  />
-</p>
+<p><img alt="Air Quality map" loading="lazy" src="/images/posts-airq-map.png"></p>
 <h2 id="wrapup">Wrapup</h2>
 <p>Be sure to check out the <a href="https://aws.amazon.com/blogs/aws/customize-and-package-dependencies-with-your-apache-spark-applications-on-amazon-emr-on-amazon-eks/">launch post</a> for more details, the documentation for <a href="https://docs.aws.amazon.com/emr/latest/EMR-on-EKS-DevelopmentGuide/docker-custom-images.html">customing docker images for EMR on EKS</a>, and my <a href="https://youtu.be/0x4DRKmNPfQ">demo video</a>.</p>
-]]></content:encoded></item><item><title>5 things they don't tell you about being a developer advocate</title><link>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</link><pubDate>Sat, 19 Jun 2021 21:59:00 -0700</pubDate><guid>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</guid><description>image credit this awesome cheerful dev advocado sticker
-I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I&amp;rsquo;ve learned a lot of things about DevRel&amp;hellip;and a lot about what I didn&amp;rsquo;t know. So here&amp;rsquo;s a top 5 list.
-1. There are multiple roles in DevRel Some people focus on community. Others focus on proof-of-concepts. Others still focus on demos, tutorials, or docs.</description><content:encoded><![CDATA[<blockquote>
+]]></content:encoded></item><item><title>5 things they don't tell you about being a developer advocate</title><link>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</link><pubDate>Sat, 19 Jun 2021 21:59:00 -0700</pubDate><guid>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</guid><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;em&gt;image credit this awesome &lt;a href="https://pimpyourowndevice.com/stickers/developer-avocado-cheerful/"&gt;cheerful dev advocado sticker&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I&amp;rsquo;ve learned a lot of things about DevRel&amp;hellip;and a lot about what I didn&amp;rsquo;t know. So here&amp;rsquo;s a top 5 list.&lt;/p&gt;
+&lt;h3 id="1-there-are-multiple-roles-in-devrel"&gt;1. There are multiple roles in DevRel&lt;/h3&gt;
+&lt;p&gt;&lt;img alt="https://www.flickr.com/photos/25559122@N06/20075862739/in/photolist-wA33yt-KzufFG-4QCZcU-4ZM6Cx-MsyjAd-2vyU1z-2vyTZ6-74Sbp6-2vyU1t-2vyU4x-74W6PQ-Nwf9B6-4chnh-FJYGE-mQnSoi-fV58f-4BEbg-2vyU5i-3aXKPY-4r5dA9-VxKee-foQmqV-dMdUbf-6ABNF6-8QMKWa-4ZsBR4-oaogd-p51z9r-dM8hev-NtJnZ-QPHq5-62k5cU-mniib-6KSVbN-8tc6KF-6vw44c-dMdQCQ-dM8eMZ-a7XPR3-61cmSL-dM8ffF-eZ6zYD-ksxxw-fwcJUB-5ouMYX-uMPG1-7yw2No-CWYUc-bp2WW-yqKWa" loading="lazy" src="https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/juggle.jpg"&gt;&lt;/p&gt;
+&lt;p&gt;Some people focus on community. Others focus on proof-of-concepts. Others still focus on demos, tutorials, or docs.&lt;/p&gt;</description><content:encoded><![CDATA[<blockquote>
 <p><em>image credit this awesome <a href="https://pimpyourowndevice.com/stickers/developer-avocado-cheerful/">cheerful dev advocado sticker</a></em></p>
 </blockquote>
 <p>I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I&rsquo;ve learned a lot of things about DevRel&hellip;and a lot about what I didn&rsquo;t know. So here&rsquo;s a top 5 list.</p>
 <h3 id="1-there-are-multiple-roles-in-devrel">1. There are multiple roles in DevRel</h3>
-<p><img loading="lazy" src="juggle.jpg" alt="https://www.flickr.com/photos/25559122@N06/20075862739/in/photolist-wA33yt-KzufFG-4QCZcU-4ZM6Cx-MsyjAd-2vyU1z-2vyTZ6-74Sbp6-2vyU1t-2vyU4x-74W6PQ-Nwf9B6-4chnh-FJYGE-mQnSoi-fV58f-4BEbg-2vyU5i-3aXKPY-4r5dA9-VxKee-foQmqV-dMdUbf-6ABNF6-8QMKWa-4ZsBR4-oaogd-p51z9r-dM8hev-NtJnZ-QPHq5-62k5cU-mniib-6KSVbN-8tc6KF-6vw44c-dMdQCQ-dM8eMZ-a7XPR3-61cmSL-dM8ffF-eZ6zYD-ksxxw-fwcJUB-5ouMYX-uMPG1-7yw2No-CWYUc-bp2WW-yqKWa"  />
-</p>
+<p><img alt="https://www.flickr.com/photos/25559122@N06/20075862739/in/photolist-wA33yt-KzufFG-4QCZcU-4ZM6Cx-MsyjAd-2vyU1z-2vyTZ6-74Sbp6-2vyU1t-2vyU4x-74W6PQ-Nwf9B6-4chnh-FJYGE-mQnSoi-fV58f-4BEbg-2vyU5i-3aXKPY-4r5dA9-VxKee-foQmqV-dMdUbf-6ABNF6-8QMKWa-4ZsBR4-oaogd-p51z9r-dM8hev-NtJnZ-QPHq5-62k5cU-mniib-6KSVbN-8tc6KF-6vw44c-dMdQCQ-dM8eMZ-a7XPR3-61cmSL-dM8ffF-eZ6zYD-ksxxw-fwcJUB-5ouMYX-uMPG1-7yw2No-CWYUc-bp2WW-yqKWa" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/juggle.jpg"></p>
 <p>Some people focus on community. Others focus on proof-of-concepts. Others still focus on demos, tutorials, or docs.</p>
 <p>And some have the lucky job of doing all of the above.</p>
 <p>It&rsquo;s a dynamic role and varies with each organization. You <em>will</em> get pulled in multiple directions and you will need to be hyper-organized as well as validate the priority of all the inbound interest with your peers and managers.</p>
 <h3 id="2-these-are-not-the-metrics-you-are-looking-for">2. These are not the metrics you are looking for</h3>
-<p><img loading="lazy" src="distracted.jpg" alt="https://www.flickr.com/photos/katerha/6009633294/in/photolist-aa3WB9-22Jt7QM-oxVVhU-qL1BR2-2hAz7ZM-2hcNDyD-2jKS86f-7YFqyd-5w4oYC-84DcZc-J5vKow-2gYThQt-2gGvpyT-yEHZUR-2haRXEK-sjrMYT-RLmDrb-AGbed4-4rBjE5-9AdV8w-CwFE9B-DnmArN-2jf1DsG-r6Mz2S-kCzZJt-2ivcKpk-bv926a-22jFGaf-23JVSg5-X1EQ7v-2hr2LKK-pGUeZC-o3gPud-5YQzek-2iTKEAH-24qudXt-BNgSpq-24EZww1-TvEqLU-iYnuh2-9Hr9tz-SsNca8-KfsY5E-2jX4v4V-NchQqQ-ePxco6-5qWRie-cNnDW-FncSK-4qWLx1"  />
-</p>
+<p><img alt="https://www.flickr.com/photos/katerha/6009633294/in/photolist-aa3WB9-22Jt7QM-oxVVhU-qL1BR2-2hAz7ZM-2hcNDyD-2jKS86f-7YFqyd-5w4oYC-84DcZc-J5vKow-2gYThQt-2gGvpyT-yEHZUR-2haRXEK-sjrMYT-RLmDrb-AGbed4-4rBjE5-9AdV8w-CwFE9B-DnmArN-2jf1DsG-r6Mz2S-kCzZJt-2ivcKpk-bv926a-22jFGaf-23JVSg5-X1EQ7v-2hr2LKK-pGUeZC-o3gPud-5YQzek-2iTKEAH-24qudXt-BNgSpq-24EZww1-TvEqLU-iYnuh2-9Hr9tz-SsNca8-KfsY5E-2jX4v4V-NchQqQ-ePxco6-5qWRie-cNnDW-FncSK-4qWLx1" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/distracted.jpg"></p>
 <p>A topic that often comes up is &ldquo;how do you measure your success&rdquo;.</p>
 <ul>
 <li>&ldquo;Well&hellip;it&rsquo;s kind of tough to tie YouTube views to marketing leads to customers&hellip;&rdquo;</li>
@@ -1485,14 +1568,12 @@ I recently rejoined AWS as a developer advocate for analytics on the EMR team an
 <p>I now have tripods for light rings, green screens, white screens, and other fancy lights I don&rsquo;t even know about.</p>
 <p>Whenever I travel, I bring no less than 3 tripods with me.</p>
 <h3 id="4-you-will-become-a-video-editing-expert">4. You will become a video editing expert</h3>
-<p><img loading="lazy" src="video.jpg" alt="https://flic.kr/p/XJqwTV"  />
-</p>
+<p><img alt="https://flic.kr/p/XJqwTV" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/video.jpg"></p>
 <p>Camtasia? After Effects? Loom? OBS? Descript? Twitch or YouTube Live? Or LinkedIn Live?</p>
 <p>There are so many video and live-streaming platforms. And I now spend a significant portion of my day producing videos.</p>
 <p>You want remove alt-tab overlays from your video? I&rsquo;m your guy.</p>
 <h3 id="5-schedules-are-key">5. Schedules are key</h3>
-<p><img loading="lazy" src="dragon-signup.jpeg" alt="Dragon Signup"  />
-</p>
+<p><img alt="Dragon Signup" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/dragon-signup.jpeg"></p>
 <p>You can&rsquo;t produce content &ldquo;every now and then&rdquo;.</p>
 <p>You can&rsquo;t have a live stream at a moment&rsquo;s notice.</p>
 <p>Folks like to know when something is coming. No, folks <em>need</em> to know when something is coming. 😄</p>
@@ -1517,8 +1598,7 @@ I recently rejoined AWS as a developer advocate for analytics on the EMR team an
 </li>
 </ul>
 <p>This is the high-level architecture of what the resulting stack will look like. Now let&rsquo;s walk through each different piece.</p>
-<p><img loading="lazy" src="/images/cdk-big-data-stack-arch.png" alt="CDK Big Data Stack architecture"  />
-</p>
+<p><img alt="CDK Big Data Stack architecture" loading="lazy" src="/images/cdk-big-data-stack-arch.png"></p>
 <h2 id="vpc">VPC</h2>
 <p>This is probably the easiest part of the whole setup. In CDK, you can provision a VPC with the following code:</p>
 <div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-python" data-lang="python"><span style="display:flex;"><span><span style="color:#f92672">from</span> aws_cdk <span style="color:#f92672">import</span> aws_ec2 <span style="color:#66d9ef">as</span> ec2
@@ -1707,8 +1787,7 @@ I recently rejoined AWS as a developer advocate for analytics on the EMR team an
 </span></span><span style="display:flex;"><span>echo $TOKEN
 </span></span></code></pre></div><p>Copy the value that&rsquo;s output, open up the following URL in your browser, and paste the token where it says &ldquo;Enter token *&rdquo;</p>
 <p><a href="http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:https/proxy/#!/login">http://localhost:8001/api/v1/namespaces/kubernetes-dashboard/services/https:kubernetes-dashboard:https/proxy/#!/login</a></p>
-<p><img loading="lazy" src="k8s-dashboard-login.png" alt=""  />
-</p>
+<p><img loading="lazy" src="/posts/cdk-big-data-stack/k8s-dashboard-login.png"></p>
 <blockquote>
 <p>A quick note about the URL above. It is constructed dynamically from the namespace and service names used in the kubernetes-dashboard helm chart. We&rsquo;ve defined the <code>fullnameOverride</code> value in the config for that chart or else the service name would be dynamic.</p>
 </blockquote>
@@ -1725,11 +1804,11 @@ EMRContainers.JobRoleArn = arn:aws:iam::012345678912:role/emr_eks_default_role
 </span></span><span style="display:flex;"><span>export EMR_EKS_EXECUTION_ARN<span style="color:#f92672">=</span>&lt;JobRoleArn&gt;
 </span></span><span style="display:flex;"><span>
 </span></span><span style="display:flex;"><span>aws emr-containers start-job-run <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --name pi-test <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
-</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>    --job-driver <span style="color:#e6db74">&#39;{
+</span></span></span><span style="display:flex;"><span>    --virtual-cluster-id <span style="color:#e6db74">${</span>EMR_EKS_CLUSTER_ID<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --name pi-test <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --execution-role-arn <span style="color:#e6db74">${</span>EMR_EKS_EXECUTION_ARN<span style="color:#e6db74">}</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --release-label emr-6.3.0-latest <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span>    --job-driver <span style="color:#e6db74">&#39;{
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">        &#34;sparkSubmitJobDriver&#34;: {
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;entryPoint&#34;: &#34;local:///usr/lib/spark/examples/src/main/python/pi.py&#34;,
 </span></span></span><span style="display:flex;"><span><span style="color:#e6db74">            &#34;sparkSubmitParameters&#34;: &#34;--conf spark.executor.instances=1 --conf spark.executor.memory=2G --conf spark.executor.cores=1 --conf spark.driver.cores=1&#34;
@@ -1756,10 +1835,14 @@ EMRContainers.JobRoleArn = arn:aws:iam::012345678912:role/emr_eks_default_role
 </span></span><span style="display:flex;"><span>        }
 </span></span><span style="display:flex;"><span>    ]
 </span></span><span style="display:flex;"><span>}
-</span></span></code></pre></div>]]></content:encoded></item><item><title>Initial Revision</title><link>https://dacort.xyz/posts/initial-revision/</link><pubDate>Fri, 18 Jun 2021 21:57:00 -0700</pubDate><guid>https://dacort.xyz/posts/initial-revision/</guid><description>Hi there 👋
-It&amp;rsquo;s been a long time – 3,399 days to exact – since I&amp;rsquo;ve blogged, but since starting a new role as a developer advocate I figured it was a good time to start again. 😁
-Welcome to the 2021 revamp of my personal developer site. In it, you will find:
-Posts about technical (and sometimes personal) content Personal and work projects I want to share I get excited and make things, and will do my best to share that here.</description><content:encoded><![CDATA[<p>Hi there 👋</p>
+</span></span></code></pre></div>]]></content:encoded></item><item><title>Initial Revision</title><link>https://dacort.xyz/posts/initial-revision/</link><pubDate>Fri, 18 Jun 2021 21:57:00 -0700</pubDate><guid>https://dacort.xyz/posts/initial-revision/</guid><description>&lt;p&gt;Hi there 👋&lt;/p&gt;
+&lt;p&gt;It&amp;rsquo;s been a long time – 3,399 days to exact – since I&amp;rsquo;ve blogged, but since starting a new role as a developer advocate I figured it was a good time to start again. 😁&lt;/p&gt;
+&lt;p&gt;Welcome to the 2021 revamp of my personal developer site. In it, you will find:&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;a href="https://dacort.xyz/posts"&gt;Posts&lt;/a&gt; about technical (and sometimes personal) content&lt;/li&gt;
+&lt;li&gt;&lt;a href="https://dacort.xyz/projects"&gt;Personal and work projects&lt;/a&gt; I want to share&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;I get excited and make things, and will do my best to share that here.&lt;/p&gt;</description><content:encoded><![CDATA[<p>Hi there 👋</p>
 <p>It&rsquo;s been a long time – 3,399 days to exact – since I&rsquo;ve blogged, but since starting a new role as a developer advocate I figured it was a good time to start again. 😁</p>
 <p>Welcome to the 2021 revamp of my personal developer site. In it, you will find:</p>
 <ul>

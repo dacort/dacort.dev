@@ -1,18 +1,20 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel><title>devrel on Damon Cortesi</title><link>https://dacort.xyz/tags/devrel/</link><description>Recent content in devrel on Damon Cortesi</description><generator>Hugo -- gohugo.io</generator><language>en-us</language><lastBuildDate>Sat, 19 Jun 2021 21:59:00 -0700</lastBuildDate><atom:link href="https://dacort.xyz/tags/devrel/index.xml" rel="self" type="application/rss+xml"/><item><title>5 things they don't tell you about being a developer advocate</title><link>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</link><pubDate>Sat, 19 Jun 2021 21:59:00 -0700</pubDate><guid>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</guid><description>image credit this awesome cheerful dev advocado sticker
-I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I&amp;rsquo;ve learned a lot of things about DevRel&amp;hellip;and a lot about what I didn&amp;rsquo;t know. So here&amp;rsquo;s a top 5 list.
-1. There are multiple roles in DevRel Some people focus on community. Others focus on proof-of-concepts. Others still focus on demos, tutorials, or docs.</description><content:encoded><![CDATA[<blockquote>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Devrel on Damon Cortesi</title><link>https://dacort.xyz/tags/devrel/</link><description>Recent content in Devrel on Damon Cortesi</description><generator>Hugo -- 0.153.2</generator><language>en-us</language><lastBuildDate>Sat, 19 Jun 2021 21:59:00 -0700</lastBuildDate><atom:link href="https://dacort.xyz/tags/devrel/index.xml" rel="self" type="application/rss+xml"/><item><title>5 things they don't tell you about being a developer advocate</title><link>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</link><pubDate>Sat, 19 Jun 2021 21:59:00 -0700</pubDate><guid>https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/</guid><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;em&gt;image credit this awesome &lt;a href="https://pimpyourowndevice.com/stickers/developer-avocado-cheerful/"&gt;cheerful dev advocado sticker&lt;/a&gt;&lt;/em&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I&amp;rsquo;ve learned a lot of things about DevRel&amp;hellip;and a lot about what I didn&amp;rsquo;t know. So here&amp;rsquo;s a top 5 list.&lt;/p&gt;
+&lt;h3 id="1-there-are-multiple-roles-in-devrel"&gt;1. There are multiple roles in DevRel&lt;/h3&gt;
+&lt;p&gt;&lt;img alt="https://www.flickr.com/photos/25559122@N06/20075862739/in/photolist-wA33yt-KzufFG-4QCZcU-4ZM6Cx-MsyjAd-2vyU1z-2vyTZ6-74Sbp6-2vyU1t-2vyU4x-74W6PQ-Nwf9B6-4chnh-FJYGE-mQnSoi-fV58f-4BEbg-2vyU5i-3aXKPY-4r5dA9-VxKee-foQmqV-dMdUbf-6ABNF6-8QMKWa-4ZsBR4-oaogd-p51z9r-dM8hev-NtJnZ-QPHq5-62k5cU-mniib-6KSVbN-8tc6KF-6vw44c-dMdQCQ-dM8eMZ-a7XPR3-61cmSL-dM8ffF-eZ6zYD-ksxxw-fwcJUB-5ouMYX-uMPG1-7yw2No-CWYUc-bp2WW-yqKWa" loading="lazy" src="https://dacort.xyz/posts/5-things-they-dont-tell-you-about-advocatos/juggle.jpg"&gt;&lt;/p&gt;
+&lt;p&gt;Some people focus on community. Others focus on proof-of-concepts. Others still focus on demos, tutorials, or docs.&lt;/p&gt;</description><content:encoded><![CDATA[<blockquote>
 <p><em>image credit this awesome <a href="https://pimpyourowndevice.com/stickers/developer-avocado-cheerful/">cheerful dev advocado sticker</a></em></p>
 </blockquote>
 <p>I recently rejoined AWS as a developer advocate for analytics on the EMR team and in the past 6 months I&rsquo;ve learned a lot of things about DevRel&hellip;and a lot about what I didn&rsquo;t know. So here&rsquo;s a top 5 list.</p>
 <h3 id="1-there-are-multiple-roles-in-devrel">1. There are multiple roles in DevRel</h3>
-<p><img loading="lazy" src="juggle.jpg" alt="https://www.flickr.com/photos/25559122@N06/20075862739/in/photolist-wA33yt-KzufFG-4QCZcU-4ZM6Cx-MsyjAd-2vyU1z-2vyTZ6-74Sbp6-2vyU1t-2vyU4x-74W6PQ-Nwf9B6-4chnh-FJYGE-mQnSoi-fV58f-4BEbg-2vyU5i-3aXKPY-4r5dA9-VxKee-foQmqV-dMdUbf-6ABNF6-8QMKWa-4ZsBR4-oaogd-p51z9r-dM8hev-NtJnZ-QPHq5-62k5cU-mniib-6KSVbN-8tc6KF-6vw44c-dMdQCQ-dM8eMZ-a7XPR3-61cmSL-dM8ffF-eZ6zYD-ksxxw-fwcJUB-5ouMYX-uMPG1-7yw2No-CWYUc-bp2WW-yqKWa"  />
-</p>
+<p><img alt="https://www.flickr.com/photos/25559122@N06/20075862739/in/photolist-wA33yt-KzufFG-4QCZcU-4ZM6Cx-MsyjAd-2vyU1z-2vyTZ6-74Sbp6-2vyU1t-2vyU4x-74W6PQ-Nwf9B6-4chnh-FJYGE-mQnSoi-fV58f-4BEbg-2vyU5i-3aXKPY-4r5dA9-VxKee-foQmqV-dMdUbf-6ABNF6-8QMKWa-4ZsBR4-oaogd-p51z9r-dM8hev-NtJnZ-QPHq5-62k5cU-mniib-6KSVbN-8tc6KF-6vw44c-dMdQCQ-dM8eMZ-a7XPR3-61cmSL-dM8ffF-eZ6zYD-ksxxw-fwcJUB-5ouMYX-uMPG1-7yw2No-CWYUc-bp2WW-yqKWa" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/juggle.jpg"></p>
 <p>Some people focus on community. Others focus on proof-of-concepts. Others still focus on demos, tutorials, or docs.</p>
 <p>And some have the lucky job of doing all of the above.</p>
 <p>It&rsquo;s a dynamic role and varies with each organization. You <em>will</em> get pulled in multiple directions and you will need to be hyper-organized as well as validate the priority of all the inbound interest with your peers and managers.</p>
 <h3 id="2-these-are-not-the-metrics-you-are-looking-for">2. These are not the metrics you are looking for</h3>
-<p><img loading="lazy" src="distracted.jpg" alt="https://www.flickr.com/photos/katerha/6009633294/in/photolist-aa3WB9-22Jt7QM-oxVVhU-qL1BR2-2hAz7ZM-2hcNDyD-2jKS86f-7YFqyd-5w4oYC-84DcZc-J5vKow-2gYThQt-2gGvpyT-yEHZUR-2haRXEK-sjrMYT-RLmDrb-AGbed4-4rBjE5-9AdV8w-CwFE9B-DnmArN-2jf1DsG-r6Mz2S-kCzZJt-2ivcKpk-bv926a-22jFGaf-23JVSg5-X1EQ7v-2hr2LKK-pGUeZC-o3gPud-5YQzek-2iTKEAH-24qudXt-BNgSpq-24EZww1-TvEqLU-iYnuh2-9Hr9tz-SsNca8-KfsY5E-2jX4v4V-NchQqQ-ePxco6-5qWRie-cNnDW-FncSK-4qWLx1"  />
-</p>
+<p><img alt="https://www.flickr.com/photos/katerha/6009633294/in/photolist-aa3WB9-22Jt7QM-oxVVhU-qL1BR2-2hAz7ZM-2hcNDyD-2jKS86f-7YFqyd-5w4oYC-84DcZc-J5vKow-2gYThQt-2gGvpyT-yEHZUR-2haRXEK-sjrMYT-RLmDrb-AGbed4-4rBjE5-9AdV8w-CwFE9B-DnmArN-2jf1DsG-r6Mz2S-kCzZJt-2ivcKpk-bv926a-22jFGaf-23JVSg5-X1EQ7v-2hr2LKK-pGUeZC-o3gPud-5YQzek-2iTKEAH-24qudXt-BNgSpq-24EZww1-TvEqLU-iYnuh2-9Hr9tz-SsNca8-KfsY5E-2jX4v4V-NchQqQ-ePxco6-5qWRie-cNnDW-FncSK-4qWLx1" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/distracted.jpg"></p>
 <p>A topic that often comes up is &ldquo;how do you measure your success&rdquo;.</p>
 <ul>
 <li>&ldquo;Well&hellip;it&rsquo;s kind of tough to tie YouTube views to marketing leads to customers&hellip;&rdquo;</li>
@@ -29,14 +31,12 @@ I recently rejoined AWS as a developer advocate for analytics on the EMR team an
 <p>I now have tripods for light rings, green screens, white screens, and other fancy lights I don&rsquo;t even know about.</p>
 <p>Whenever I travel, I bring no less than 3 tripods with me.</p>
 <h3 id="4-you-will-become-a-video-editing-expert">4. You will become a video editing expert</h3>
-<p><img loading="lazy" src="video.jpg" alt="https://flic.kr/p/XJqwTV"  />
-</p>
+<p><img alt="https://flic.kr/p/XJqwTV" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/video.jpg"></p>
 <p>Camtasia? After Effects? Loom? OBS? Descript? Twitch or YouTube Live? Or LinkedIn Live?</p>
 <p>There are so many video and live-streaming platforms. And I now spend a significant portion of my day producing videos.</p>
 <p>You want remove alt-tab overlays from your video? I&rsquo;m your guy.</p>
 <h3 id="5-schedules-are-key">5. Schedules are key</h3>
-<p><img loading="lazy" src="dragon-signup.jpeg" alt="Dragon Signup"  />
-</p>
+<p><img alt="Dragon Signup" loading="lazy" src="/posts/5-things-they-dont-tell-you-about-advocatos/dragon-signup.jpeg"></p>
 <p>You can&rsquo;t produce content &ldquo;every now and then&rdquo;.</p>
 <p>You can&rsquo;t have a live stream at a moment&rsquo;s notice.</p>
 <p>Folks like to know when something is coming. No, folks <em>need</em> to know when something is coming. 😄</p>

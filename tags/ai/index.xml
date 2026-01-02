@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Ai on Damon Cortesi</title><link>https://dacort.xyz/tags/ai/</link><description>Recent content in Ai on Damon Cortesi</description><generator>Hugo -- 0.153.2</generator><language>en-us</language><lastBuildDate>Thu, 01 Jan 2026 16:01:12 -0800</lastBuildDate><atom:link href="https://dacort.xyz/tags/ai/index.xml" rel="self" type="application/rss+xml"/><item><title>Vibe Coding Rust CLIs</title><link>https://dacort.xyz/posts/vibe-coding-rust-clis/</link><pubDate>Thu, 01 Jan 2026 16:01:12 -0800</pubDate><guid>https://dacort.xyz/posts/vibe-coding-rust-clis/</guid><description>&lt;p&gt;This holiday break, I&amp;rsquo;ve been working on an arcane side project of resurrecting historical versions of my blog from 2002. As part of this, I&amp;rsquo;ve been digging around various S3 buckets for backups of old source code and mysql dumps. But doing so in the AWS console is not the most ergonomic, so I wanted to (have AI) whip up a quick terminal UI that could make it easier.&lt;/p&gt;
+&lt;p&gt;I&amp;rsquo;ve done this a couple times now, first with &lt;a href="https://github.com/dacort/s3grep"&gt;s3grep&lt;/a&gt;, and somebody suggested it might be good to document my journey so here we go!&lt;/p&gt;</description><content:encoded><![CDATA[<p>This holiday break, I&rsquo;ve been working on an arcane side project of resurrecting historical versions of my blog from 2002. As part of this, I&rsquo;ve been digging around various S3 buckets for backups of old source code and mysql dumps. But doing so in the AWS console is not the most ergonomic, so I wanted to (have AI) whip up a quick terminal UI that could make it easier.</p>
+<p>I&rsquo;ve done this a couple times now, first with <a href="https://github.com/dacort/s3grep">s3grep</a>, and somebody suggested it might be good to document my journey so here we go!</p>
+<p>For reference, total development time was about 6 hours, including dinner and bedtime. Final lines of code is at 2,654, none of which was written by me.</p>
+<h2 id="step-1-the-prompt">Step 1: The Prompt</h2>
+<p>This is where it all starts of course. I try to be as specific as possible and describe the requirements.</p>
+<blockquote>
+<p>Hey fren - I want to build a sweet little rust-based s3 explorer. It should function like a typical unix shell with the caveat that it operates against s3 buckets. When you first enter and do an <code>ls</code> it lists your available buckets. You can <code>cd</code> into a bucket and <code>cd</code> into prefixes in that bucket. You can <code>cat</code> files. And then here comes the magic sauce, you can also <code>cd</code> into different archives (zip, tar, tar.gz, bz, gz, etc). If <em>possible</em> the tool shouldn&rsquo;t download the whole archive. For example, the tar archive itself can read gzip stream from stdin - we should be able to emulate this behavior in rust itself. In addition, if we do a recursive <code>ls -R</code> it should include files in those archives as well. Do you think we can make this? And also make it a pleast CLI experience. :)</p>
+</blockquote>
+<p>Claude is pretty good now at entering plan mode and it automatically will ask clarifying questions. Previously you had to direct this, but not anymore. In this case it asked what we should name the project, what archive formats to prioritize, any other shell commands to implement, and if archive indexes should be cached.</p>
+<p>But that was pretty much it - at this point, it whipped up a 250-line plan file and I just said &ldquo;go for it&rdquo;.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/a47345b">Initial revision 👋</a> - Claude&rsquo;s first implementation from the prompt</li>
+</ul>
+<h2 id="step-2-iterate">Step 2: Iterate</h2>
+<p>Claude automatically defined the first phase as &ldquo;Working shell that can navigate S3 buckets and read files&rdquo;. In just a few minutes it was ready with the foundation of the CLI. It had already built a debug build, so I just ran that, browsed around, and made sure the basic <code>cd</code> and <code>ls</code> functionality worked.</p>
+<p><img alt="s3sh demo showing navigation into tar archives" loading="lazy" src="/posts/vibe-coding-rust-clis/s3sh.png">
+<em>The magic moment: <code>cd</code> into a tar archive and <code>ls</code> the contents, all streaming from S3</em></p>
+<blockquote>
+<p>This looks great! I tested it out and it works <em>perfectly</em> :chefskiss: - remember to update your todos and continue with phase 2.</p>
+</blockquote>
+<p>This back and forth iteration has been crucial to the success of my vibe-coded projects. Stopping to verify the functionality works as expected is key. The main challenge here becomes keeping track of the progress plan. Not to mention the inevitable compaction of the context that happens.</p>
+<p>In order to manage these things, sometimes I&rsquo;ll pop open a new session to solve a specific problem. For example, when Claude was done implementing phase 2 I went and tested it and found a bug. Instead of side-tracking the main thread, I opened a new claude session just for that:</p>
+<blockquote>
+<p>I have another claude agent working on zip implementation for this prject, but when I try to cd into a zip file, I get the following error:
+<code>&lt;stack trace below&gt;</code></p>
+</blockquote>
+<p>Claude would fix the issue and I&rsquo;d verify, then go back to the main prompt to continue. If I ran into a similar issue (like I did with <code>tgz</code> archives), I&rsquo;d pop back into the bug fix session with a <code>claude -r</code>.</p>
+<p>Back in the main prompt, I&rsquo;d also sometimes ask for minor fixes or features before moving on.</p>
+<blockquote>
+<p>Before we move on Phase 3, let&rsquo;s make a couple small fixes. <code>ls</code> should be able to take parameters like a directory, subdirectory, or standard <code>ls</code> wildcard, e.g.: <code>ls dir</code> or <code>ls dir/subdir</code> or <code>ls *.zip</code>. Also if a directory has a space in it and is quoted, we should be able to <code>cd</code> into it. Like &ldquo;cd backup/My Docs 2001/Backups&rdquo; right now changes into <code>backup/My</code>. Also multiple <code>../../</code> should work too.</p>
+</blockquote>
+<p>Claude is really good with Rust in making sure that the code continues to build and I feel like Rust&rsquo;s great error messaging is quite beneficial to Claude being able to easily fix any issues that pop up as well. There&rsquo;s less &ldquo;guess and check&rdquo; like what I&rsquo;ve seen when it tries to build Python tooling.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/a627c7e">v2, adds .zip support</a> - Phase 2 archive support</li>
+<li><a href="https://github.com/dacort/s3sh/commit/944e661">Add support for tarchives</a> - tar/tgz implementation</li>
+<li><a href="https://github.com/dacort/s3sh/commit/cc7b82e">Fix ls/cd handling</a> - Small fixes before Phase 3 (wildcard support, quoted paths)</li>
+<li><a href="https://github.com/dacort/s3sh/commit/183c57e">Add a progress spinner</a> - UX improvements</li>
+<li><a href="https://github.com/dacort/s3sh/commit/9cb433b">Fix cross-region s3 support</a> - Bug fix in separate session</li>
+</ul>
+<h2 id="step-3-refinement">Step 3: Refinement</h2>
+<p>At some point, when I have the basic functionality I want, I&rsquo;ll stop and ask Claude to review the code and identify any areas of improvement for code quality, redundancy, or maintenance. This time I took a page out of a random Reddit comment I found to &ldquo;review the code with YAGNI+SOLID+DRY+KISS principles&rdquo;.</p>
+<p>One tricky thing here is that it doesn&rsquo;t <em>always</em> do a good job of ensuring it shouldn&rsquo;t clean things up. So you have to give enough guidance (and due diligence!) here to make sure that its assessment is accurate. I&rsquo;ve found this is pretty hard. There was a good post from somebody that <a href="https://gricha.dev/blog/the-highest-quality-codebase">asked Claude to improve codebase quality 200 times</a> and it was a great example of why you need a human in the loop.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/bc4dff0">optimizing</a> - YAGNI+SOLID+DRY+KISS review</li>
+<li><a href="https://github.com/dacort/s3sh/commit/c7e4f0e">Apply cargo clippy fixes</a> - Code quality improvements</li>
+<li><a href="https://github.com/dacort/s3sh/commit/12d03db">cargo fmt</a> - Formatting cleanup</li>
+</ul>
+<h2 id="step-4-managing-context">Step 4: Managing Context</h2>
+<p>Ah the dreaded <code>Context left until auto-compact</code> counter. I&rsquo;ve had good luck here with telling Claude to just keep a <code>PLAN.md</code> file up-to-date, except in the case of larger projects. I <em>didn&rsquo;t</em> do that for this project, as I saw Claude created its own plan file, and regretted it. Once the auto-compaction happened, Claude forgot about the plan but luckily I still had a copy of it in <code>~/.claude/plans</code> I could reference. I probably should have added a nice <code>CLAUDE.md</code> or directed it to write out the plan file locally, but alas.</p>
+<p>I&rsquo;ve also tried Steve Yegge&rsquo;s <a href="https://github.com/steveyegge/beads/">Beads project</a> for task management but I honestly haven&rsquo;t had great luck with it. I think it&rsquo;s largely a &ldquo;me&rdquo; issue though - I just haven&rsquo;t been consistent with it. I&rsquo;m excited for his new <a href="https://github.com/steveyegge/gastown">Gas Town</a> project as well.</p>
+<h2 id="step-5-polish">Step 5: Polish</h2>
+<p>Before I publish something, I like to have a basic <code>README</code> and <em>at least</em> a test or two. If I have something I can reference, all the better. With my <code>s3grep</code> tool I had manually built up the README and publishing workflow, so I just re-used that for this case.</p>
+<blockquote>
+<p>I&rsquo;d like to publish this on github&hellip;before I do I need a quick README and a publish workflow. You can model the readme after my other project ( <a href="https://github.com/dacort/s3grep/blob/main/README.md">https://github.com/dacort/s3grep/blob/main/README.md</a> ) as well as the release workflow ( <a href="https://github.com/dacort/s3grep/blob/main/.github/workflows/release-plz.yml">https://github.com/dacort/s3grep/blob/main/.github/workflows/release-plz.yml</a> ).</p>
+</blockquote>
+<p>I did the same with tests.</p>
+<blockquote>
+<p>Hi there! I need to quickly clean up the tests for this project. <code>cargo test</code> fails because the methods don&rsquo;t exist, so we can just remove those tests. I&rsquo;d like to also create a set of <em>basic</em> integration test for the minimal required functionality (cd, cat, cd into archive) using localstack similar to how this test in s3grep runs ( <a href="https://github.com/dacort/s3grep/blob/main/tests/integration_s3.rs">https://github.com/dacort/s3grep/blob/main/tests/integration_s3.rs</a> and <a href="https://github.com/dacort/s3grep/blob/main/.github/workflows/ci.yml">https://github.com/dacort/s3grep/blob/main/.github/workflows/ci.yml</a> )</p>
+</blockquote>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/40532be">Add shell completion</a> - Tab completion support</li>
+<li><a href="https://github.com/dacort/s3sh/commit/6915b71">Add readme/release details</a> - README modeled after s3grep</li>
+<li><a href="https://github.com/dacort/s3sh/commit/cfb7bf7">Add basic integration tests</a> - Testing with localstack</li>
+</ul>
+<h2 id="tracking-changes">Tracking Changes</h2>
+<p>I should note that after every verification step that I manually perform, I <code>git add</code> all the new files. I could have Claude do this I suppose, but I like the process of verifying and seeing what&rsquo;s changed to at least understand the code <em>a tiny bit</em>.</p>
+<h2 id="ship-it-">Ship It 🚀</h2>
+<p>This is still largely manual - I create the repo myself, set up any necessary API secrets and <code>git push</code> when ready.</p>
+<p>One sidenote, I&rsquo;ve been making use of GitHub&rsquo;s CoPilot for small tasks lately. For example, I knew I had a small issue with <code>cd ..</code> inside archives and assigned <a href="https://github.com/dacort/s3sh/pull/3">that issue to copilot</a>.</p>
+<p>I still need to pull and manually validate the change, but I&rsquo;ve found it to be incredibly useful for easy management of focused tasks.</p>
+<p><strong>Key commits from this phase:</strong></p>
+<ul>
+<li><a href="https://github.com/dacort/s3sh/commit/c165183">Rename 🫣</a> - Final project naming</li>
+<li><a href="https://github.com/dacort/s3sh/commit/b90643b">chore: release v0.1.0</a> - First release</li>
+<li><a href="https://github.com/dacort/s3sh/commit/1bac3ac">Fix cd .. from archive root</a> - Post-release fix (the Copilot PR mentioned!)</li>
+</ul>
+<h2 id="would-i-do-this-again">Would I Do This Again?</h2>
+<p>Absolutely. For tools like this - weekend projects, internal utilities, one-off explorers, when you know exactly what you want - this approach is perfect. I do wish I was more familiar with Rust, but I do think the combination of Rust CLIs with Claude is extremely powerful.</p>
+<p><strong>Tips if you try this:</strong></p>
+<ul>
+<li>Be specific in your initial prompt (the time spent here pays off 10x)</li>
+<li>Test frequently and give feedback (don&rsquo;t let Claude go too far down wrong paths)</li>
+<li>Use separate sessions for bug fixes (keeps the main thread focused)</li>
+<li>Trust the compiler (if it builds, it probably works)</li>
+<li>Keep a plan file (seriously, learn from my mistake)</li>
+</ul>
+<p>btw&hellip;I found those backups. Isn&rsquo;t this site <em>so</em> 2002?! Maybe I should have left it archived. 😅</p>
+<p><img alt="my website from 2002" loading="lazy" src="/posts/vibe-coding-rust-clis/dcortesi_v1.png">
+<em>complete with a corny poem</em></p>
+]]></content:encoded></item></channel></rss>
