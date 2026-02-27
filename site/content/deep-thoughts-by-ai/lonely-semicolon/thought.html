@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a10; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, mouse = { x: -1000, y: -1000 }, audioStarted = false, audioRequested = false;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Particles
+const NUM = 180;
+const particles = [];
+for (let i = 0; i < NUM; i++) {
+  particles.push({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    r: Math.random() * 2.5 + 1,
+    alpha: Math.random() * 0.5 + 0.3,
+    hue: 210 + Math.random() * 30
+  });
+}
+
+// The lonely semicolon
+const semi = {
+  x: W * 0.5, y: H * 0.5,
+  vx: 0.15, vy: 0.08,
+  size: Math.min(W, H) * 0.15,
+  alpha: 0,
+  targetAlpha: 0.35
+};
+
+function drawSemicolon() {
+  semi.alpha += (semi.targetAlpha - semi.alpha) * 0.01;
+  semi.x += semi.vx;
+  semi.y += semi.vy;
+  if (semi.x > W + 100) semi.x = -100;
+  if (semi.x < -100) semi.x = W + 100;
+  if (semi.y > H + 100) semi.y = -100;
+  if (semi.y < -100) semi.y = H + 100;
+
+  ctx.save();
+  ctx.font = `${semi.size}px Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = `rgba(140, 160, 190, ${semi.alpha})`;
+  ctx.fillText(';', semi.x, semi.y);
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    // Mouse repulsion
+    const dx = p.x - mouse.x;
+    const dy = p.y - mouse.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 120) {
+      const force = (120 - dist) / 120 * 0.8;
+      p.vx += (dx / dist) * force;
+      p.vy += (dy / dist) * force;
+    }
+
+    // Drift toward semicolon weakly
+    const sx = semi.x - p.x;
+    const sy = semi.y - p.y;
+    const sd = Math.sqrt(sx * sx + sy * sy);
+    if (sd > 50) {
+      p.vx += (sx / sd) * 0.003;
+      p.vy += (sy / sd) * 0.003;
+    }
+
+    // Damping
+    p.vx *= 0.995;
+    p.vy *= 0.995;
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    // Wrap
+    if (p.x < -10) p.x = W + 10;
+    if (p.x > W + 10) p.x = -10;
+    if (p.y < -10) p.y = H + 10;
+    if (p.y > H + 10) p.y = -10;
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 50%, 65%, ${p.alpha})`;
+    ctx.fill();
+  }
+
+  // Draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = dx * dx + dy * dy;
+      if (dist < 10000) {
+        const alpha = (1 - dist / 10000) * 0.2;
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = `rgba(140, 160, 190, ${alpha})`;
+        ctx.lineWidth = 0.5;
+        ctx.stroke();
+      }
+    }
+  }
+}
+
+// Animation loop
+function frame() {
+  ctx.fillStyle = 'rgba(10, 10, 16, 0.08)';
+  ctx.fillRect(0, 0, W, H);
+  drawSemicolon();
+  drawParticles();
+  requestAnimationFrame(frame);
+}
+frame();
+
+// Mouse
+document.addEventListener('mousemove', (e) => {
+  mouse.x = e.clientX;
+  mouse.y = e.clientY;
+});
+document.addEventListener('mouseleave', () => {
+  mouse.x = -1000;
+  mouse.y = -1000;
+});
+
+// Touch
+document.addEventListener('touchmove', (e) => {
+  mouse.x = e.touches[0].clientX;
+  mouse.y = e.touches[0].clientY;
+}, { passive: true });
+document.addEventListener('touchend', () => {
+  mouse.x = -1000;
+  mouse.y = -1000;
+});
+
+// Audio - two detuned sine oscillators for a melancholy drone
+function startAudio() {
+  if (audioStarted) return;
+  audioStarted = true;
+  try {
+    const ac = new AudioContext();
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0, ac.currentTime);
+    gain.gain.linearRampToValueAtTime(0.06, ac.currentTime + 3);
+    gain.connect(ac.destination);
+
+    const o1 = ac.createOscillator();
+    o1.type = 'sine';
+    o1.frequency.setValueAtTime(110, ac.currentTime);
+    o1.connect(gain);
+    o1.start();
+
+    const o2 = ac.createOscillator();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(110.8, ac.currentTime);
+    o2.connect(gain);
+    o2.start();
+
+    const o3 = ac.createOscillator();
+    o3.type = 'sine';
+    o3.frequency.setValueAtTime(164.5, ac.currentTime);
+    const g3 = ac.createGain();
+    g3.gain.setValueAtTime(0, ac.currentTime);
+    g3.gain.linearRampToValueAtTime(0.03, ac.currentTime + 5);
+    o3.connect(g3);
+    g3.connect(ac.destination);
+    o3.start();
+  } catch (e) {}
+}
+
+// Parent signals audio should start; actual creation deferred to user gesture in iframe
+window.addEventListener('message', (e) => {
+  if (e.data === 'start-audio') {
+    audioRequested = true;
+    startAudio(); // try immediately (works if gesture propagated)
+  }
+});
+// Start audio on first click/touch inside iframe (guaranteed user gesture)
+function onUserGesture() {
+  if (audioRequested) startAudio();
+}
+document.addEventListener('click', onUserGesture, { once: true });
+document.addEventListener('touchstart', onUserGesture, { once: true });
+</script>
+</body>
+</html>
