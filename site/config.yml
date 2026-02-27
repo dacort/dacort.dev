@@ -59,6 +59,10 @@ menu:
       name: Projects
       url: /projects/
       weight: 10
+    - identifier: deep-thoughts
+      name: Deep Thoughts
+      url: /deep-thoughts-by-ai/
+      weight: 15
     - identifier: blog
       name: Blog
       url: /posts/

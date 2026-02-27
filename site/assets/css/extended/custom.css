@@ -2,3 +2,51 @@
 .post-content ul ul {
     margin-bottom: 0px;
 }
+
+/* ── Deep Thoughts Gallery ─────────────────────────────────────────── */
+.deep-thoughts-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--gap);
+  margin-top: var(--gap);
+}
+
+.thought-card {
+  cursor: pointer;
+  background: var(--entry);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+  position: relative;
+}
+
+.thought-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--secondary);
+}
+
+.thought-card .thought-quote p {
+  font-style: italic;
+  color: var(--content);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+
+.thought-card .entry-footer {
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.thought-mood {
+  font-size: 0.75rem;
+  color: var(--secondary);
+  background: var(--tertiary);
+  padding: 0.15rem 0.5rem;
+  border-radius: calc(var(--radius) / 2);
+  text-transform: capitalize;
+  letter-spacing: 0.03em;
+}

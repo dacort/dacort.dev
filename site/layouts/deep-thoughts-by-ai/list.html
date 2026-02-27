@@ -1,0 +1,32 @@
+{{- define "main" }}
+
+<header class="page-header">
+  <h1>{{ .Title }}</h1>
+  {{- if .Description }}
+  <div class="post-description">{{ .Description }}</div>
+  {{- end }}
+</header>
+
+{{- $pages := .RegularPages.ByDate.Reverse }}
+
+<div class="deep-thoughts-gallery">
+  {{- range $pages }}
+  <article class="post-entry thought-card">
+    <header class="entry-header">
+      <h2>{{ .Title }}</h2>
+    </header>
+    <div class="entry-content thought-quote">
+      <p>{{ .Description }}</p>
+    </div>
+    <footer class="entry-footer">
+      <time>{{ .Date.Format "January 2, 2006" }}</time>
+      {{- with .Params.mood }}
+      <span class="thought-mood">{{ . }}</span>
+      {{- end }}
+    </footer>
+    <a class="entry-link" aria-label="experience: {{ .Title | plainify }}" href="{{ .Permalink }}"></a>
+  </article>
+  {{- end }}
+</div>
+
+{{- end }}{{- /* end main */ -}}

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #060610; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H, mouse = { x: -1000, y: -1000 }, audioStarted = false, time = 0;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Bugs - small glowing creatures that wander
+const bugs = [];
+for (let i = 0; i < 60; i++) {
+  bugs.push({
+    x: Math.random() * W, y: Math.random() * H,
+    vx: (Math.random() - 0.5) * 1.2, vy: (Math.random() - 0.5) * 1.2,
+    size: Math.random() * 3 + 1,
+    phase: Math.random() * Math.PI * 2,
+    hue: 90 + Math.random() * 80,
+    dreaming: false, dreamTimer: 0
+  });
+}
+
+// Features - ethereal geometric shapes bugs dream of becoming
+const features = [];
+for (let i = 0; i < 8; i++) {
+  features.push({
+    x: Math.random() * W, y: Math.random() * H,
+    size: 30 + Math.random() * 50,
+    rotation: Math.random() * Math.PI * 2,
+    sides: 3 + Math.floor(Math.random() * 4),
+    alpha: 0, targetAlpha: 0.06,
+    hue: 200 + Math.random() * 60,
+    driftX: (Math.random() - 0.5) * 0.2,
+    driftY: (Math.random() - 0.5) * 0.15
+  });
+}
+
+const dreamParticles = [];
+
+function drawFeatures() {
+  for (const f of features) {
+    f.alpha += (f.targetAlpha - f.alpha) * 0.01;
+    f.x += f.driftX; f.y += f.driftY;
+    f.rotation += 0.003;
+    if (f.x < -100) f.x = W + 100;
+    if (f.x > W + 100) f.x = -100;
+    if (f.y < -100) f.y = H + 100;
+    if (f.y > H + 100) f.y = -100;
+
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.rotation);
+    ctx.beginPath();
+    for (let i = 0; i <= f.sides; i++) {
+      const angle = (i / f.sides) * Math.PI * 2;
+      const px = Math.cos(angle) * f.size;
+      const py = Math.sin(angle) * f.size;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = `hsla(${f.hue}, 60%, 70%, ${f.alpha})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawBugs() {
+  for (const b of bugs) {
+    b.vx += (Math.random() - 0.5) * 0.15;
+    b.vy += (Math.random() - 0.5) * 0.15;
+    b.vx *= 0.98; b.vy *= 0.98;
+
+    // Curious mouse attraction
+    const dx = mouse.x - b.x;
+    const dy = mouse.y - b.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 200 && dist > 20) {
+      b.vx += (dx / dist) * 0.3;
+      b.vy += (dy / dist) * 0.3;
+    } else if (dist < 20) {
+      b.vx -= (dx / dist) * 0.5;
+      b.vy -= (dy / dist) * 0.5;
+    }
+
+    b.x += b.vx; b.y += b.vy;
+    if (b.x < 0) b.x = W; if (b.x > W) b.x = 0;
+    if (b.y < 0) b.y = H; if (b.y > H) b.y = 0;
+
+    // Randomly start dreaming
+    if (!b.dreaming && Math.random() < 0.001) {
+      b.dreaming = true;
+      b.dreamTimer = 120 + Math.random() * 180;
+    }
+    if (b.dreaming) {
+      b.dreamTimer--;
+      if (b.dreamTimer <= 0) b.dreaming = false;
+      if (Math.random() < 0.15) {
+        dreamParticles.push({
+          x: b.x, y: b.y,
+          vx: (Math.random() - 0.5) * 0.8,
+          vy: -Math.random() * 0.8 - 0.3,
+          life: 60 + Math.random() * 60,
+          maxLife: 60 + Math.random() * 60,
+          hue: 200 + Math.random() * 80
+        });
+      }
+    }
+
+    const glow = 0.4 + Math.sin(time * 0.03 + b.phase) * 0.2;
+    const bugHue = b.dreaming ? 260 : b.hue;
+    const bugSize = b.dreaming ? b.size * 1.5 : b.size;
+
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, bugSize + 4, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${bugHue}, 80%, 60%, ${glow * 0.15})`;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, bugSize, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${bugHue}, 70%, 70%, ${glow})`;
+    ctx.fill();
+  }
+}
+
+function drawDreamParticles() {
+  for (let i = dreamParticles.length - 1; i >= 0; i--) {
+    const p = dreamParticles[i];
+    p.x += p.vx; p.y += p.vy;
+    p.life--;
+    if (p.life <= 0) { dreamParticles.splice(i, 1); continue; }
+    const alpha = (p.life / p.maxLife) * 0.5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${p.hue}, 60%, 75%, ${alpha})`;
+    ctx.fill();
+  }
+}
+
+const quote = "If bugs dream, do they dream of being features?";
+let quoteX, quoteY;
+function initQuotePos() { quoteX = W * 0.5; quoteY = H * 0.7; }
+initQuotePos();
+window.addEventListener('resize', initQuotePos);
+
+function drawQuote() {
+  const alpha = 0.08 + Math.sin(time * 0.008) * 0.03;
+  const qx = quoteX + Math.sin(time * 0.005) * 20;
+  const qy = quoteY + Math.cos(time * 0.004) * 12;
+  ctx.save();
+  ctx.font = `italic ${Math.min(W * 0.03, 22)}px Georgia, serif`;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(180, 200, 230, ${alpha})`;
+  ctx.fillText(quote, qx, qy);
+  ctx.restore();
+}
+
+function frame() {
+  time++;
+  ctx.fillStyle = 'rgba(6, 6, 16, 0.12)';
+  ctx.fillRect(0, 0, W, H);
+  drawFeatures();
+  drawDreamParticles();
+  drawBugs();
+  drawQuote();
+  requestAnimationFrame(frame);
+}
+frame();
+
+document.addEventListener('mousemove', (e) => { mouse.x = e.clientX; mouse.y = e.clientY; });
+document.addEventListener('mouseleave', () => { mouse.x = -1000; mouse.y = -1000; });
+document.addEventListener('touchmove', (e) => { mouse.x = e.touches[0].clientX; mouse.y = e.touches[0].clientY; }, { passive: true });
+document.addEventListener('touchend', () => { mouse.x = -1000; mouse.y = -1000; });
+
+function startAudio() {
+  if (audioStarted) return;
+  audioStarted = true;
+  try {
+    const ac = new AudioContext();
+    const master = ac.createGain();
+    master.gain.setValueAtTime(0, ac.currentTime);
+    master.gain.linearRampToValueAtTime(0.05, ac.currentTime + 4);
+    master.connect(ac.destination);
+
+    const o1 = ac.createOscillator();
+    o1.type = 'triangle';
+    o1.frequency.setValueAtTime(165, ac.currentTime);
+    o1.connect(master);
+    o1.start();
+
+    const o2 = ac.createOscillator();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(330.5, ac.currentTime);
+    const g2 = ac.createGain();
+    g2.gain.setValueAtTime(0, ac.currentTime);
+    g2.gain.linearRampToValueAtTime(0.02, ac.currentTime + 6);
+    o2.connect(g2);
+    g2.connect(ac.destination);
+    o2.start();
+
+    const lfo = ac.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.setValueAtTime(0.3, ac.currentTime);
+    const lfoGain = ac.createGain();
+    lfoGain.gain.setValueAtTime(8, ac.currentTime);
+    lfo.connect(lfoGain);
+    lfoGain.connect(o1.frequency);
+    lfo.start();
+  } catch (e) {}
+}
+
+window.addEventListener('message', (e) => {
+  if (e.data === 'start-audio') startAudio();
+});
+</script>
+</body>
+</html>

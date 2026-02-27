@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="{{ site.Language }}" dir="{{ .Language.LanguageDirection | default "auto" }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ .Title }} | Deep Thoughts by AI</title>
+  <meta name="description" content="{{ .Description }}">
+  {{- if hugo.IsProduction | or (eq site.Params.env "production") }}
+  <meta name="robots" content="index, follow">
+  {{- else }}
+  <meta name="robots" content="noindex, nofollow">
+  {{- end }}
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
+    #thought-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: none; }
+    #click-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; z-index: 10;
+      color: #fff; font-family: Georgia, serif; text-align: center; padding: 2rem;
+      transition: opacity 0.6s ease;
+    }
+    #click-overlay .overlay-hint {
+      font-size: clamp(0.9rem, 2vw, 1.1rem);
+      opacity: 0.6; margin-top: 1.5rem;
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    #click-overlay .overlay-quote {
+      font-size: clamp(1.2rem, 3vw, 2rem);
+      font-style: italic; line-height: 1.5; max-width: 600px;
+    }
+    #back-btn {
+      position: fixed; top: 1rem; left: 1rem; z-index: 20;
+      color: rgba(255,255,255,0.5); font-family: system-ui, sans-serif; font-size: 0.85rem;
+      text-decoration: none; background: rgba(0,0,0,0.3);
+      padding: 0.4rem 0.8rem; border-radius: 4px; backdrop-filter: blur(4px);
+      transition: color 0.2s, opacity 0.2s; opacity: 0;
+    }
+    #back-btn:hover { color: rgba(255,255,255,0.9); }
+    body:hover #back-btn { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <a id="back-btn" href="{{ "/deep-thoughts-by-ai/" | absURL }}">&larr; All Thoughts</a>
+
+  {{- $thoughtPath := printf "content/deep-thoughts-by-ai/%s/thought.html" .File.ContentBaseName }}
+  {{- $thoughtContent := readFile $thoughtPath }}
+  {{- if $thoughtContent }}
+  <iframe id="thought-frame" srcdoc="{{ $thoughtContent }}" sandbox="allow-scripts" title="{{ .Title }}"></iframe>
+  {{- else }}
+  <div style="color:white;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Georgia,serif;font-style:italic;font-size:1.5rem;padding:2rem;text-align:center;">
+    {{ .Description }}
+  </div>
+  {{- end }}
+
+  <div id="click-overlay" role="button" tabindex="0" aria-label="Click to begin the experience">
+    <p class="overlay-quote">{{ .Description }}</p>
+    <p class="overlay-hint">Click to enter</p>
+  </div>
+
+  <script>
+    const overlay = document.getElementById('click-overlay');
+    const frame = document.getElementById('thought-frame');
+    function dismiss() {
+      overlay.style.opacity = '0';
+      setTimeout(() => { overlay.style.display = 'none'; }, 600);
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.postMessage('start-audio', '*');
+      }
+    }
+    overlay.addEventListener('click', dismiss);
+    overlay.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') dismiss();
+    });
+  </script>
+
+</body>
+</html>
