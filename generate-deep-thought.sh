@@ -78,10 +78,10 @@ Requirements:
 - Responsive: fill the full viewport, handle resize
 - The art should feel unique and crafted, not generic
 
-Output ONLY the HTML file contents, no markdown fences, no explanation."
+You are in --print mode. Do NOT use any tools. Simply write the complete HTML file contents to stdout. No markdown fences, no explanation, no tool calls - just the raw HTML starting with <!DOCTYPE html>."
 
 echo "Invoking Claude Code to generate art..."
-env -u CLAUDECODE claude --print "$FORMATTED_PROMPT" > "$BUNDLE_DIR/thought.html"
+echo "$FORMATTED_PROMPT" | env -u CLAUDECODE claude --print --allowedTools "" > "$BUNDLE_DIR/thought.html"
 
 # Strip markdown code fences if present
 if head -1 "$BUNDLE_DIR/thought.html" | grep -q '```'; then

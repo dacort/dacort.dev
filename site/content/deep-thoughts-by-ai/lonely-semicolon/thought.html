@@ -14,7 +14,7 @@
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
-let W, H, mouse = { x: -1000, y: -1000 }, audioStarted = false;
+let W, H, mouse = { x: -1000, y: -1000 }, audioStarted = false, audioRequested = false;
 
 function resize() {
   W = canvas.width = window.innerWidth;
@@ -32,8 +32,8 @@ for (let i = 0; i < NUM; i++) {
     y: Math.random() * H,
     vx: (Math.random() - 0.5) * 0.3,
     vy: (Math.random() - 0.5) * 0.3,
-    r: Math.random() * 2 + 0.5,
-    alpha: Math.random() * 0.4 + 0.1,
+    r: Math.random() * 2.5 + 1,
+    alpha: Math.random() * 0.5 + 0.3,
     hue: 210 + Math.random() * 30
   });
 }
@@ -44,11 +44,11 @@ const semi = {
   vx: 0.15, vy: 0.08,
   size: Math.min(W, H) * 0.15,
   alpha: 0,
-  targetAlpha: 0.12
+  targetAlpha: 0.35
 };
 
 function drawSemicolon() {
-  semi.alpha += (semi.targetAlpha - semi.alpha) * 0.005;
+  semi.alpha += (semi.targetAlpha - semi.alpha) * 0.01;
   semi.x += semi.vx;
   semi.y += semi.vy;
   if (semi.x > W + 100) semi.x = -100;
@@ -101,7 +101,7 @@ function drawParticles() {
 
     ctx.beginPath();
     ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fillStyle = `hsla(${p.hue}, 30%, 60%, ${p.alpha})`;
+    ctx.fillStyle = `hsla(${p.hue}, 50%, 65%, ${p.alpha})`;
     ctx.fill();
   }
 
@@ -111,8 +111,8 @@ function drawParticles() {
       const dx = particles[i].x - particles[j].x;
       const dy = particles[i].y - particles[j].y;
       const dist = dx * dx + dy * dy;
-      if (dist < 6400) {
-        const alpha = (1 - dist / 6400) * 0.08;
+      if (dist < 10000) {
+        const alpha = (1 - dist / 10000) * 0.2;
         ctx.beginPath();
         ctx.moveTo(particles[i].x, particles[i].y);
         ctx.lineTo(particles[j].x, particles[j].y);
@@ -126,7 +126,7 @@ function drawParticles() {
 
 // Animation loop
 function frame() {
-  ctx.fillStyle = 'rgba(10, 10, 16, 0.15)';
+  ctx.fillStyle = 'rgba(10, 10, 16, 0.08)';
   ctx.fillRect(0, 0, W, H);
   drawSemicolon();
   drawParticles();
@@ -189,10 +189,19 @@ function startAudio() {
   } catch (e) {}
 }
 
-// Listen for parent message to start audio
+// Parent signals audio should start; actual creation deferred to user gesture in iframe
 window.addEventListener('message', (e) => {
-  if (e.data === 'start-audio') startAudio();
+  if (e.data === 'start-audio') {
+    audioRequested = true;
+    startAudio(); // try immediately (works if gesture propagated)
+  }
 });
+// Start audio on first click/touch inside iframe (guaranteed user gesture)
+function onUserGesture() {
+  if (audioRequested) startAudio();
+}
+document.addEventListener('click', onUserGesture, { once: true });
+document.addEventListener('touchstart', onUserGesture, { once: true });
 </script>
 </body>
 </html>

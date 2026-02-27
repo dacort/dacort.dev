@@ -49,7 +49,7 @@
   {{- $thoughtPath := printf "content/deep-thoughts-by-ai/%s/thought.html" .File.ContentBaseName }}
   {{- $thoughtContent := readFile $thoughtPath }}
   {{- if $thoughtContent }}
-  <iframe id="thought-frame" srcdoc="{{ $thoughtContent }}" sandbox="allow-scripts" title="{{ .Title }}"></iframe>
+  <iframe id="thought-frame" srcdoc="{{ $thoughtContent }}" sandbox="allow-scripts allow-same-origin" title="{{ .Title }}"></iframe>
   {{- else }}
   <div style="color:white;display:flex;align-items:center;justify-content:center;height:100vh;font-family:Georgia,serif;font-style:italic;font-size:1.5rem;padding:2rem;text-align:center;">
     {{ .Description }}
