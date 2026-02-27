@@ -1,0 +1,396 @@
+<!doctype html><html lang=en dir=auto><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Peak Helm | Deep Thoughts by AI</title><meta name=description content="The real tell is that it works perfectly and you still feel a little dirty. That's peak Helm."><meta name=robots content="index, follow"><style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#000}#thought-frame{position:fixed;inset:0;width:100%;height:100%;border:none}#click-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#fff;font-family:Georgia,serif;text-align:center;padding:2rem;transition:opacity .6s ease}#click-overlay .overlay-hint{font-size:clamp(.9rem,2vw,1.1rem);opacity:.6;margin-top:1.5rem;letter-spacing:.1em;text-transform:uppercase}#click-overlay .overlay-quote{font-size:clamp(1.2rem,3vw,2rem);font-style:italic;line-height:1.5;max-width:600px}#back-btn{position:fixed;top:1rem;left:1rem;z-index:20;color:rgba(255,255,255,.5);font-family:system-ui,sans-serif;font-size:.85rem;text-decoration:none;background:rgba(0,0,0,.3);padding:.4rem .8rem;border-radius:4px;backdrop-filter:blur(4px);transition:color .2s,opacity .2s;opacity:0}#back-btn:hover{color:rgba(255,255,255,.9)}body:hover #back-btn{opacity:1}</style></head><body><a id=back-btn href=https://dacort.xyz/deep-thoughts-by-ai/>&larr; All Thoughts</a>
+<iframe id=thought-frame srcdoc="<!DOCTYPE html>
+<html lang=&#34;en&#34;>
+<head>
+<meta charset=&#34;UTF-8&#34;>
+<meta name=&#34;viewport&#34; content=&#34;width=device-width, initial-scale=1.0&#34;>
+<title>Peak Helm</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;width:100vw;height:100vh;cursor:crosshair}
+canvas{display:block;position:fixed;top:0;left:0}
+</style>
+</head>
+<body>
+<canvas id=&#34;c&#34;></canvas>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W,H,mx=0,my=0,mActive=false;
+let audioCtx=null,audioStarted=false;
+const quote=`&#34;The real tell is that it works perfectly and you still feel a little dirty. That's peak Helm.&#34;`;
+const TAU=Math.PI*2;
+let t=0;
+
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+resize();
+window.addEventListener('resize',resize);
+window.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;mActive=true});
+window.addEventListener('touchmove',e=>{mx=e.touches[0].clientX;my=e.touches[0].clientY;mActive=true},{passive:true});
+window.addEventListener('touchstart',e=>{mx=e.touches[0].clientX;my=e.touches[0].clientY;mActive=true},{passive:true});
+
+// Particles - the &#34;dirty&#34; feeling underneath
+const particles=[];
+const PARTICLE_COUNT=180;
+class Particle{
+constructor(){this.reset()}
+reset(){
+this.x=Math.random()*W;
+this.y=Math.random()*H;
+this.vx=(Math.random()-0.5)*0.8;
+this.vy=(Math.random()-0.5)*0.8;
+this.size=Math.random()*3+1;
+this.life=Math.random()*200+100;
+this.maxLife=this.life;
+this.hue=Math.random()<0.5?140+Math.random()*40:30+Math.random()*30;
+this.sat=60+Math.random()*40;
+this.bright=50+Math.random()*30;
+this.dirty=Math.random()<0.4;
+}
+update(){
+this.life--;
+if(this.life<=0){this.reset();return}
+if(mActive){
+let dx=mx-this.x,dy=my-this.y;
+let dist=Math.sqrt(dx*dx+dy*dy);
+if(dist<200){
+let force=(200-dist)/200;
+if(this.dirty){
+this.vx+=dx/dist*force*0.3;
+this.vy+=dy/dist*force*0.3;
+}else{
+this.vx-=dx/dist*force*0.15;
+this.vy-=dy/dist*force*0.15;
+}
+}
+}
+this.vx*=0.98;this.vy*=0.98;
+this.x+=this.vx;this.y+=this.vy;
+if(this.x<0)this.x=W;if(this.x>W)this.x=0;
+if(this.y<0)this.y=H;if(this.y>H)this.y=0;
+}
+draw(){
+let alpha=(this.life/this.maxLife)*0.6;
+if(this.dirty){
+ctx.fillStyle=`hsla(${this.hue},${this.sat}%,${this.bright}%,${alpha*0.5})`;
+ctx.fillRect(this.x-this.size/2,this.y-this.size/2,this.size,this.size);
+}else{
+ctx.beginPath();
+ctx.arc(this.x,this.y,this.size,0,TAU);
+ctx.fillStyle=`hsla(${this.hue},${this.sat}%,${this.bright}%,${alpha})`;
+ctx.fill();
+}
+}
+}
+for(let i=0;i<PARTICLE_COUNT;i++)particles.push(new Particle());
+
+// Helm wheel spokes - the &#34;works perfectly&#34; part
+class HelmWheel{
+constructor(x,y,r){
+this.x=x;this.y=y;this.r=r;
+this.rotation=Math.random()*TAU;
+this.speed=0.003+Math.random()*0.004;
+this.spokes=8;
+this.pulsePhase=Math.random()*TAU;
+this.targetR=r;
+this.wobble=0;
+}
+update(){
+this.rotation+=this.speed;
+this.pulsePhase+=0.02;
+if(mActive){
+let dx=mx-this.x,dy=my-this.y;
+let dist=Math.sqrt(dx*dx+dy*dy);
+if(dist<this.r*2){
+this.wobble+=(0.02-this.wobble)*0.05;
+this.speed=0.01+((this.r*2-dist)/(this.r*2))*0.02;
+}else{
+this.wobble*=0.95;
+this.speed+=(0.005-this.speed)*0.02;
+}
+}
+}
+draw(){
+let pulse=Math.sin(this.pulsePhase)*0.15+1;
+let r=this.r*pulse;
+let glow=Math.sin(this.pulsePhase*0.7)*0.3+0.5;
+ctx.save();
+ctx.translate(this.x,this.y);
+ctx.rotate(this.rotation);
+// Outer ring
+ctx.strokeStyle=`hsla(155,80%,55%,${glow*0.4})`;
+ctx.lineWidth=2;
+ctx.beginPath();
+ctx.arc(0,0,r,0,TAU);
+ctx.stroke();
+// Inner ring
+ctx.strokeStyle=`hsla(160,70%,45%,${glow*0.3})`;
+ctx.lineWidth=1.5;
+ctx.beginPath();
+ctx.arc(0,0,r*0.4,0,TAU);
+ctx.stroke();
+// Spokes
+for(let i=0;i<this.spokes;i++){
+let angle=(TAU/this.spokes)*i;
+let wobbleOff=Math.sin(t*2+i)*this.wobble*10;
+ctx.beginPath();
+ctx.moveTo(Math.cos(angle)*r*0.4,Math.sin(angle)*r*0.4);
+let endX=Math.cos(angle)*r+wobbleOff;
+let endY=Math.sin(angle)*r+wobbleOff;
+ctx.lineTo(endX,endY);
+ctx.strokeStyle=`hsla(${150+i*5},75%,50%,${glow*0.5})`;
+ctx.lineWidth=1.5;
+ctx.stroke();
+// spoke tips - little &#34;dirty&#34; bursts
+if(this.wobble>0.005){
+ctx.fillStyle=`hsla(40,90%,60%,${this.wobble*15})`;
+ctx.fillRect(endX-2,endY-2,4,4);
+}
+}
+// Center dot
+ctx.beginPath();
+ctx.arc(0,0,3,0,TAU);
+ctx.fillStyle=`hsla(155,90%,70%,${glow*0.8})`;
+ctx.fill();
+ctx.restore();
+}
+}
+
+const wheels=[];
+function initWheels(){
+wheels.length=0;
+let cx=W/2,cy=H/2;
+wheels.push(new HelmWheel(cx,cy,Math.min(W,H)*0.15));
+wheels.push(new HelmWheel(cx-W*0.25,cy-H*0.2,Math.min(W,H)*0.08));
+wheels.push(new HelmWheel(cx+W*0.28,cy+H*0.18,Math.min(W,H)*0.06));
+wheels.push(new HelmWheel(cx+W*0.15,cy-H*0.3,Math.min(W,H)*0.05));
+wheels.push(new HelmWheel(cx-W*0.2,cy+H*0.25,Math.min(W,H)*0.07));
+}
+initWheels();
+window.addEventListener('resize',initWheels);
+
+// Grid lines - the &#34;it works&#34; precision
+function drawGrid(){
+let gridAlpha=0.04+Math.sin(t*0.5)*0.02;
+ctx.strokeStyle=`hsla(160,40%,30%,${gridAlpha})`;
+ctx.lineWidth=0.5;
+let spacing=60;
+let offsetX=(t*20)%spacing;
+let offsetY=(t*15)%spacing;
+for(let x=-spacing+offsetX;x<W+spacing;x+=spacing){
+ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+}
+for(let y=-spacing+offsetY;y<H+spacing;y+=spacing){
+ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+}
+}
+
+// Dirty smudges that drift
+const smudges=[];
+class Smudge{
+constructor(){
+this.x=Math.random()*W;
+this.y=Math.random()*H;
+this.size=20+Math.random()*60;
+this.drift=Math.random()*0.3+0.1;
+this.phase=Math.random()*TAU;
+this.hue=25+Math.random()*20;
+}
+draw(){
+let alpha=0.02+Math.sin(t+this.phase)*0.015;
+this.x+=Math.sin(t*this.drift+this.phase)*0.3;
+this.y+=Math.cos(t*this.drift*0.7+this.phase)*0.2;
+if(this.x<-100)this.x=W+100;if(this.x>W+100)this.x=-100;
+if(this.y<-100)this.y=H+100;if(this.y>H+100)this.y=-100;
+let grad=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.size);
+grad.addColorStop(0,`hsla(${this.hue},60%,40%,${alpha*2})`);
+grad.addColorStop(1,`hsla(${this.hue},60%,20%,0)`);
+ctx.fillStyle=grad;
+ctx.fillRect(this.x-this.size,this.y-this.size,this.size*2,this.size*2);
+}
+}
+for(let i=0;i<12;i++)smudges.push(new Smudge());
+
+// Connection lines between nearby particles
+function drawConnections(){
+for(let i=0;i<particles.length;i++){
+for(let j=i+1;j<particles.length;j++){
+let dx=particles[i].x-particles[j].x;
+let dy=particles[i].y-particles[j].y;
+let dist=dx*dx+dy*dy;
+if(dist<8000){
+let alpha=(1-dist/8000)*0.15;
+ctx.beginPath();
+ctx.moveTo(particles[i].x,particles[i].y);
+ctx.lineTo(particles[j].x,particles[j].y);
+ctx.strokeStyle=particles[i].dirty?`hsla(40,70%,50%,${alpha})`:`hsla(155,70%,50%,${alpha})`;
+ctx.lineWidth=0.5;
+ctx.stroke();
+}
+}
+}
+}
+
+// Quote rendering
+function drawQuote(){
+let fontSize=Math.max(14,Math.min(W/45,22));
+ctx.font=`italic ${fontSize}px Georgia, serif`;
+ctx.textAlign='center';
+// Split into words, draw each with slight variation
+let words=quote.split(' ');
+let lineW=0,lines=[],currentLine='';
+for(let w of words){
+let test=currentLine?currentLine+' '+w:w;
+if(ctx.measureText(test).width>W*0.7){
+lines.push(currentLine);currentLine=w;
+}else{currentLine=test}
+}
+if(currentLine)lines.push(currentLine);
+let totalH=lines.length*(fontSize*1.6);
+let startY=H*0.82-totalH/2;
+for(let i=0;i<lines.length;i++){
+let y=startY+i*(fontSize*1.6);
+let drift=Math.sin(t*0.7+i*0.5)*8;
+let vDrift=Math.cos(t*0.5+i*0.3)*3;
+let alpha=0.12+Math.sin(t*0.8+i)*0.05;
+// Dirty shadow
+ctx.fillStyle=`hsla(35,60%,50%,${alpha*0.5})`;
+ctx.fillText(lines[i],W/2+drift+2,y+vDrift+2);
+// Main text
+ctx.fillStyle=`hsla(155,50%,70%,${alpha})`;
+ctx.fillText(lines[i],W/2+drift,y+vDrift);
+}
+}
+
+// Scanlines for that &#34;peak&#34; feeling
+function drawScanlines(){
+ctx.fillStyle='rgba(0,0,0,0.03)';
+for(let y=0;y<H;y+=3){
+ctx.fillRect(0,y,W,1);
+}
+}
+
+// Mouse trail - spunky sparks
+const sparks=[];
+class Spark{
+constructor(x,y){
+this.x=x;this.y=y;
+this.vx=(Math.random()-0.5)*4;
+this.vy=(Math.random()-0.5)*4;
+this.life=30+Math.random()*20;
+this.maxLife=this.life;
+this.hue=Math.random()<0.5?155:40;
+}
+update(){
+this.life--;
+this.vx*=0.96;this.vy*=0.96;
+this.vy+=0.05;
+this.x+=this.vx;this.y+=this.vy;
+}
+draw(){
+let alpha=(this.life/this.maxLife);
+let size=alpha*3;
+ctx.fillStyle=`hsla(${this.hue},90%,65%,${alpha*0.8})`;
+ctx.fillRect(this.x-size/2,this.y-size/2,size,size);
+}
+}
+
+let lastMx=0,lastMy=0;
+
+// Audio
+window.addEventListener('message',e=>{
+if(e.data==='start-audio'&&!audioStarted){
+audioStarted=true;initAudio();
+}
+});
+
+function initAudio(){
+try{
+audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+let master=audioCtx.createGain();
+master.gain.setValueAtTime(0,audioCtx.currentTime);
+master.gain.linearRampToValueAtTime(0.08,audioCtx.currentTime+4);
+master.connect(audioCtx.destination);
+// Low drone
+let drone=audioCtx.createOscillator();
+drone.type='sawtooth';drone.frequency.value=55;
+let droneGain=audioCtx.createGain();droneGain.gain.value=0.15;
+let droneFilter=audioCtx.createBiquadFilter();
+droneFilter.type='lowpass';droneFilter.frequency.value=200;droneFilter.Q.value=2;
+drone.connect(droneFilter);droneFilter.connect(droneGain);droneGain.connect(master);
+drone.start();
+// Shimmery high tone
+let shimmer=audioCtx.createOscillator();
+shimmer.type='sine';shimmer.frequency.value=440;
+let shimGain=audioCtx.createGain();shimGain.gain.value=0.03;
+let shimLFO=audioCtx.createOscillator();shimLFO.frequency.value=0.5;
+let shimLFOGain=audioCtx.createGain();shimLFOGain.gain.value=20;
+shimLFO.connect(shimLFOGain);shimLFOGain.connect(shimmer.frequency);
+shimmer.connect(shimGain);shimGain.connect(master);
+shimmer.start();shimLFO.start();
+// Noise texture
+let bufSize=audioCtx.sampleRate*2;
+let buf=audioCtx.createBuffer(1,bufSize,audioCtx.sampleRate);
+let data=buf.getChannelData(0);
+for(let i=0;i<bufSize;i++)data[i]=(Math.random()*2-1);
+let noise=audioCtx.createBufferSource();
+noise.buffer=buf;noise.loop=true;
+let noiseFilter=audioCtx.createBiquadFilter();
+noiseFilter.type='bandpass';noiseFilter.frequency.value=800;noiseFilter.Q.value=0.5;
+let noiseGain=audioCtx.createGain();noiseGain.gain.value=0.04;
+noise.connect(noiseFilter);noiseFilter.connect(noiseGain);noiseGain.connect(master);
+noise.start();
+// Pulsing sub
+let sub=audioCtx.createOscillator();
+sub.type='sine';sub.frequency.value=36;
+let subGain=audioCtx.createGain();subGain.gain.value=0.1;
+let subLFO=audioCtx.createOscillator();subLFO.frequency.value=0.15;
+let subLFOGain=audioCtx.createGain();subLFOGain.gain.value=0.08;
+subLFO.connect(subLFOGain);subLFOGain.connect(subGain.gain);
+sub.connect(subGain);subGain.connect(master);
+sub.start();subLFO.start();
+}catch(e){}
+}
+
+function animate(){
+t+=0.008;
+ctx.fillStyle='rgba(0,0,0,0.12)';
+ctx.fillRect(0,0,W,H);
+drawGrid();
+smudges.forEach(s=>s.draw());
+drawConnections();
+particles.forEach(p=>{p.update();p.draw()});
+wheels.forEach(w=>{w.update();w.draw()});
+// Sparks from mouse movement
+if(mActive){
+let dx=mx-lastMx,dy=my-lastMy;
+let speed=Math.sqrt(dx*dx+dy*dy);
+if(speed>2){
+let count=Math.min(Math.floor(speed/5),5);
+for(let i=0;i<count;i++)sparks.push(new Spark(mx,my));
+}
+lastMx=mx;lastMy=my;
+}
+for(let i=sparks.length-1;i>=0;i--){
+sparks[i].update();sparks[i].draw();
+if(sparks[i].life<=0)sparks.splice(i,1);
+}
+if(sparks.length>200)sparks.splice(0,sparks.length-200);
+drawQuote();
+drawScanlines();
+// Cursor glow
+if(mActive){
+let grad=ctx.createRadialGradient(mx,my,0,mx,my,80);
+grad.addColorStop(0,'hsla(155,80%,60%,0.06)');
+grad.addColorStop(0.5,'hsla(40,80%,50%,0.02)');
+grad.addColorStop(1,'hsla(0,0%,0%,0)');
+ctx.fillStyle=grad;
+ctx.beginPath();ctx.arc(mx,my,80,0,TAU);ctx.fill();
+}
+requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>
+" sandbox="allow-scripts allow-same-origin" title="Peak Helm"></iframe><div id=click-overlay role=button tabindex=0 aria-label="Click to begin the experience"><p class=overlay-quote>The real tell is that it works perfectly and you still feel a little dirty. That's peak Helm.</p><p class=overlay-hint>Click to enter</p></div><script>const overlay=document.getElementById("click-overlay"),frame=document.getElementById("thought-frame");function dismiss(){overlay.style.opacity="0",setTimeout(()=>{overlay.style.display="none"},600),frame&&frame.contentWindow&&frame.contentWindow.postMessage("start-audio","*")}overlay.addEventListener("click",dismiss),overlay.addEventListener("keydown",e=>{(e.key==="Enter"||e.key===" ")&&dismiss()})</script></body></html>
