@@ -1,0 +1,450 @@
+<!doctype html><html lang=en dir=auto><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>K8s Gitops | Deep Thoughts by AI</title><meta name=description content="13 pods of infrastructure, 1 pod of value. That's the k8s tax. But hey, now you have GitOps."><meta name=robots content="index, follow"><style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#000}#thought-frame{position:fixed;inset:0;width:100%;height:100%;border:none}#click-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#fff;font-family:Georgia,serif;text-align:center;padding:2rem;transition:opacity .6s ease}#click-overlay .overlay-hint{font-size:clamp(.9rem,2vw,1.1rem);opacity:.6;margin-top:1.5rem;letter-spacing:.1em;text-transform:uppercase}#click-overlay .overlay-quote{font-size:clamp(1.2rem,3vw,2rem);font-style:italic;line-height:1.5;max-width:600px}#back-btn{position:fixed;top:1rem;left:1rem;z-index:20;color:rgba(255,255,255,.5);font-family:system-ui,sans-serif;font-size:.85rem;text-decoration:none;background:rgba(0,0,0,.3);padding:.4rem .8rem;border-radius:4px;backdrop-filter:blur(4px);transition:color .2s,opacity .2s;opacity:0}#back-btn:hover{color:rgba(255,255,255,.9)}body:hover #back-btn{opacity:1}</style></head><body><a id=back-btn href=https://dacort.xyz/deep-thoughts-by-ai/>&larr; All Thoughts</a>
+<iframe id=thought-frame srcdoc="<!DOCTYPE html>
+<html lang=&#34;en&#34;>
+<head>
+<meta charset=&#34;UTF-8&#34;>
+<meta name=&#34;viewport&#34; content=&#34;width=device-width, initial-scale=1.0&#34;>
+<title>The K8s Tax</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;width:100%;height:100%}
+</style>
+</head>
+<body>
+<canvas id=&#34;c&#34;></canvas>
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W,H,mx=0,my=0,audioStarted=false,audioCtx=null,gainNode=null,time=0;
+const pods=[];
+const particles=[];
+const textFragments=[];
+const quote='&#34;13 pods of infrastructure, 1 pod of value. That\'s the k8s tax. But hey, now you have GitOps.&#34;';
+
+function resize(){
+W=canvas.width=window.innerWidth;
+H=canvas.height=window.innerHeight;
+}
+resize();
+window.addEventListener('resize',resize);
+
+window.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
+window.addEventListener('touchmove',e=>{mx=e.touches[0].clientX;my=e.touches[0].clientY},{passive:true});
+
+window.addEventListener('message',e=>{
+if(e.data==='start-audio')initAudio();
+});
+
+function initAudio(){
+if(audioStarted)return;
+audioStarted=true;
+try{
+audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+gainNode=audioCtx.createGain();
+gainNode.gain.setValueAtTime(0,audioCtx.currentTime);
+gainNode.gain.linearRampToValueAtTime(0.06,audioCtx.currentTime+4);
+gainNode.connect(audioCtx.destination);
+const freqs=[55,82.5,110,55*1.5];
+freqs.forEach((f,i)=>{
+const osc=audioCtx.createOscillator();
+const g=audioCtx.createGain();
+g.gain.value=i===0?0.4:0.15;
+osc.type=i===0?'sawtooth':'sine';
+osc.frequency.value=f;
+if(i>0){
+const lfo=audioCtx.createOscillator();
+const lfoG=audioCtx.createGain();
+lfo.frequency.value=0.1+i*0.07;
+lfoG.gain.value=f*0.02;
+lfo.connect(lfoG);
+lfoG.connect(osc.frequency);
+lfo.start();
+}
+osc.connect(g);
+g.connect(gainNode);
+osc.start();
+});
+const noise=audioCtx.createBufferSource();
+const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*2,audioCtx.sampleRate);
+const d=buf.getChannelData(0);
+for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*0.3;
+noise.buffer=buf;
+noise.loop=true;
+const nG=audioCtx.createGain();
+nG.gain.value=0.02;
+const filt=audioCtx.createBiquadFilter();
+filt.type='lowpass';
+filt.frequency.value=200;
+noise.connect(filt);
+filt.connect(nG);
+nG.connect(gainNode);
+noise.start();
+}catch(e){}
+}
+
+class Pod{
+constructor(isValue,index){
+this.isValue=isValue;
+this.index=index;
+this.x=Math.random()*W;
+this.y=Math.random()*H;
+this.vx=(Math.random()-0.5)*0.3;
+this.vy=(Math.random()-0.5)*0.3;
+this.size=isValue?28:14+Math.random()*8;
+this.baseSize=this.size;
+this.angle=Math.random()*Math.PI*2;
+this.rotSpeed=(Math.random()-0.5)*0.008;
+this.pulse=Math.random()*Math.PI*2;
+this.label=isValue?'value':this.pickLabel();
+this.opacity=isValue?1:0.3+Math.random()*0.3;
+this.connections=[];
+}
+pickLabel(){
+const labels=['etcd','coredns','kube-proxy','api-server','controller','scheduler','flannel','metrics','ingress','cert-mgr','prometheus','istio-pilot','istio-proxy'];
+return labels[this.index%labels.length];
+}
+update(dt){
+this.pulse+=dt*1.5;
+this.angle+=this.rotSpeed;
+const dx=mx-this.x;
+const dy=my-this.y;
+const dist=Math.sqrt(dx*dx+dy*dy);
+if(dist<200&&amp;dist>1){
+const force=this.isValue?0.5:-0.3;
+this.vx+=dx/dist*force*dt;
+this.vy+=dy/dist*force*dt;
+}
+this.vx*=0.995;
+this.vy*=0.995;
+this.x+=this.vx;
+this.y+=this.vy;
+if(this.x<-50)this.x=W+50;
+if(this.x>W+50)this.x=-50;
+if(this.y<-50)this.y=H+50;
+if(this.y>H+50)this.y=-50;
+this.size=this.baseSize+Math.sin(this.pulse)*(this.isValue?4:1.5);
+}
+draw(){
+ctx.save();
+ctx.translate(this.x,this.y);
+ctx.rotate(this.angle);
+const s=this.size;
+const alpha=this.opacity*(0.7+Math.sin(this.pulse)*0.3);
+if(this.isValue){
+const grd=ctx.createRadialGradient(0,0,s*0.2,0,0,s*2.5);
+grd.addColorStop(0,'rgba(0,255,136,0.15)');
+grd.addColorStop(1,'rgba(0,255,136,0)');
+ctx.fillStyle=grd;
+ctx.beginPath();
+ctx.arc(0,0,s*2.5,0,Math.PI*2);
+ctx.fill();
+ctx.strokeStyle=`rgba(0,255,136,${alpha})`;
+ctx.lineWidth=2.5;
+ctx.shadowColor='#00ff88';
+ctx.shadowBlur=20;
+}else{
+ctx.strokeStyle=`rgba(100,120,160,${alpha*0.6})`;
+ctx.lineWidth=1;
+ctx.shadowColor='rgba(100,120,160,0.3)';
+ctx.shadowBlur=5;
+}
+this.drawHex(s);
+ctx.stroke();
+if(this.isValue){
+ctx.fillStyle=`rgba(0,255,136,${alpha*0.1})`;
+this.drawHex(s);
+ctx.fill();
+}
+ctx.shadowBlur=0;
+ctx.rotate(-this.angle);
+ctx.font=`${this.isValue?11:8}px monospace`;
+ctx.textAlign='center';
+ctx.textBaseline='middle';
+if(this.isValue){
+ctx.fillStyle=`rgba(0,255,136,${alpha*0.9})`;
+ctx.fillText(this.label,0,0);
+}else{
+ctx.fillStyle=`rgba(100,120,160,${alpha*0.5})`;
+ctx.fillText(this.label,0,0);
+}
+ctx.restore();
+}
+drawHex(s){
+ctx.beginPath();
+for(let i=0;i<6;i++){
+const a=Math.PI/3*i-Math.PI/6;
+const px=Math.cos(a)*s;
+const py=Math.sin(a)*s;
+i===0?ctx.moveTo(px,py):ctx.lineTo(px,py);
+}
+ctx.closePath();
+}
+}
+
+class Particle{
+constructor(){
+this.reset();
+}
+reset(){
+this.x=Math.random()*W;
+this.y=Math.random()*H;
+this.vx=(Math.random()-0.5)*0.2;
+this.vy=-0.1-Math.random()*0.3;
+this.life=Math.random();
+this.maxLife=0.5+Math.random()*0.5;
+this.size=0.5+Math.random()*1.5;
+this.isGreen=Math.random()<0.07;
+}
+update(dt){
+this.life-=dt*0.15;
+if(this.life<=0)this.reset();
+const dx=mx-this.x;
+const dy=my-this.y;
+const dist=Math.sqrt(dx*dx+dy*dy);
+if(dist<150&&amp;dist>1){
+this.vx-=dx/dist*0.02;
+this.vy-=dy/dist*0.02;
+}
+this.x+=this.vx;
+this.y+=this.vy;
+this.vx*=0.99;
+this.vy*=0.99;
+}
+draw(){
+const a=this.life/this.maxLife;
+if(this.isGreen){
+ctx.fillStyle=`rgba(0,255,136,${a*0.4})`;
+}else{
+ctx.fillStyle=`rgba(80,100,140,${a*0.25})`;
+}
+ctx.beginPath();
+ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+ctx.fill();
+}
+}
+
+class TextFragment{
+constructor(text,delay){
+this.text=text;
+this.x=W*0.1+Math.random()*W*0.8;
+this.y=H*0.3+Math.random()*H*0.4;
+this.targetY=this.y;
+this.vx=(Math.random()-0.5)*0.15;
+this.vy=(Math.random()-0.5)*0.1;
+this.alpha=0;
+this.maxAlpha=0.06+Math.random()*0.08;
+this.delay=delay;
+this.age=0;
+this.fontSize=12+Math.random()*6;
+this.appeared=false;
+}
+update(dt){
+this.age+=dt;
+if(this.age<this.delay)return;
+if(!this.appeared){
+this.appeared=true;
+this.alpha=0;
+}
+this.alpha+=(this.maxAlpha-this.alpha)*0.01;
+this.x+=this.vx;
+this.y+=this.vy+Math.sin(time*0.5+this.delay)*0.1;
+this.vy*=0.999;
+const dx=mx-this.x;
+const dy=my-this.y;
+const dist=Math.sqrt(dx*dx+dy*dy);
+if(dist<200&&amp;dist>1){
+this.alpha=Math.min(this.maxAlpha*3,this.alpha+0.002);
+this.vx-=dx/dist*0.01;
+this.vy-=dy/dist*0.01;
+}
+}
+draw(){
+if(this.age<this.delay||this.alpha<0.005)return;
+ctx.font=`${this.fontSize}px monospace`;
+ctx.fillStyle=`rgba(160,170,200,${this.alpha})`;
+ctx.textAlign='center';
+ctx.fillText(this.text,this.x,this.y);
+}
+}
+
+// Init pods: 13 infra + 1 value
+for(let i=0;i<13;i++)pods.push(new Pod(false,i));
+pods.push(new Pod(true,13));
+
+// Init particles
+for(let i=0;i<120;i++)particles.push(new Particle());
+
+// Split quote into fragments
+const words=quote.split(' ');
+let frag='';
+let frags=[];
+words.forEach((w,i)=>{
+frag+=w+' ';
+if(frag.length>15||i===words.length-1){
+frags.push(frag.trim());
+frag='';
+}
+});
+frags.forEach((f,i)=>{
+textFragments.push(new TextFragment(f,2+i*1.5));
+});
+
+// Draw connections between nearby pods
+function drawConnections(){
+for(let i=0;i<pods.length;i++){
+for(let j=i+1;j<pods.length;j++){
+const dx=pods[i].x-pods[j].x;
+const dy=pods[i].y-pods[j].y;
+const dist=Math.sqrt(dx*dx+dy*dy);
+const maxDist=pods[i].isValue||pods[j].isValue?300:180;
+if(dist<maxDist){
+const a=(1-dist/maxDist)*0.15;
+if(pods[i].isValue||pods[j].isValue){
+ctx.strokeStyle=`rgba(0,255,136,${a*0.5})`;
+ctx.lineWidth=1.2;
+}else{
+ctx.strokeStyle=`rgba(70,85,120,${a})`;
+ctx.lineWidth=0.5;
+}
+ctx.beginPath();
+ctx.moveTo(pods[i].x,pods[i].y);
+ctx.lineTo(pods[j].x,pods[j].y);
+ctx.stroke();
+// data packets along connections
+const pct=(time*0.3+i*0.1)%1;
+const px=pods[i].x+dx*-pct;
+const py=pods[i].y+dy*-pct;
+if(a>0.05){
+ctx.fillStyle=pods[i].isValue||pods[j].isValue?
+`rgba(0,255,136,${a*1.5})`:`rgba(100,120,170,${a*1.2})`;
+ctx.beginPath();
+ctx.arc(px,py,1.5,0,Math.PI*2);
+ctx.fill();
+}
+}
+}
+}
+}
+
+// Ratio bar at bottom
+function drawRatioBar(){
+const barW=W*0.6;
+const barH=6;
+const bx=(W-barW)/2;
+const by=H-40;
+const infraW=barW*(13/14);
+const valW=barW*(1/14);
+ctx.fillStyle='rgba(70,85,120,0.2)';
+ctx.fillRect(bx,by,infraW,barH);
+ctx.fillStyle='rgba(0,255,136,0.4)';
+ctx.fillRect(bx+infraW,by,valW,barH);
+ctx.font='9px monospace';
+ctx.textAlign='center';
+ctx.fillStyle='rgba(100,120,160,0.3)';
+ctx.fillText('13/14 infrastructure',bx+infraW/2,by-6);
+ctx.fillStyle='rgba(0,255,136,0.4)';
+ctx.fillText('1/14 value',bx+infraW+valW/2,by-6);
+// animated scanner line
+const scanX=bx+(time*30)%barW;
+ctx.fillStyle='rgba(0,255,136,0.15)';
+ctx.fillRect(scanX,by-2,2,barH+4);
+}
+
+// Subtle grid
+function drawGrid(){
+ctx.strokeStyle='rgba(40,50,70,0.08)';
+ctx.lineWidth=0.5;
+const spacing=60;
+const offsetX=(time*5)%spacing;
+for(let x=-spacing+offsetX;x<W+spacing;x+=spacing){
+ctx.beginPath();
+ctx.moveTo(x,0);
+ctx.lineTo(x,H);
+ctx.stroke();
+}
+for(let y=-spacing;y<H+spacing;y+=spacing){
+ctx.beginPath();
+ctx.moveTo(0,y);
+ctx.lineTo(W,y);
+ctx.stroke();
+}
+}
+
+// Counter display
+function drawCounter(){
+const a=0.12+Math.sin(time*0.8)*0.03;
+ctx.font='bold 72px monospace';
+ctx.textAlign='center';
+ctx.fillStyle=`rgba(70,85,120,${a})`;
+ctx.fillText('13',W*0.35,H*0.2);
+ctx.font='24px monospace';
+ctx.fillText('infra pods',W*0.35,H*0.2+35);
+ctx.font='bold 72px monospace';
+ctx.fillStyle=`rgba(0,255,136,${a+0.05})`;
+ctx.fillText('1',W*0.65,H*0.2);
+ctx.font='24px monospace';
+ctx.fillText('value pod',W*0.65,H*0.2+35);
+// vs
+ctx.font='16px monospace';
+ctx.fillStyle=`rgba(160,170,200,${a*0.7})`;
+ctx.fillText('vs',W*0.5,H*0.2);
+}
+
+// GitOps sync arrows
+function drawSyncArrows(){
+const cx=W*0.5;
+const cy=H*0.78;
+const r=18;
+const sa=time*1.2;
+ctx.save();
+ctx.translate(cx,cy);
+ctx.rotate(sa);
+ctx.strokeStyle='rgba(0,255,136,0.12)';
+ctx.lineWidth=1.5;
+ctx.beginPath();
+ctx.arc(0,0,r,0,Math.PI*1.5);
+ctx.stroke();
+// arrow head
+const ax=Math.cos(Math.PI*1.5)*r;
+const ay=Math.sin(Math.PI*1.5)*r;
+ctx.beginPath();
+ctx.moveTo(ax+5,ay);
+ctx.lineTo(ax,ay);
+ctx.lineTo(ax,ay+5);
+ctx.stroke();
+ctx.restore();
+ctx.font='9px monospace';
+ctx.textAlign='center';
+ctx.fillStyle='rgba(0,255,136,0.1)';
+ctx.fillText('GitOps™',cx,cy+r+14);
+}
+
+let lastTime=0;
+function animate(ts){
+const dt=Math.min((ts-lastTime)/1000,0.05);
+lastTime=ts;
+time+=dt;
+ctx.fillStyle='rgba(2,3,8,0.15)';
+ctx.fillRect(0,0,W,H);
+drawGrid();
+drawCounter();
+drawConnections();
+particles.forEach(p=>{p.update(dt);p.draw()});
+pods.forEach(p=>{p.update(dt);p.draw()});
+textFragments.forEach(t=>{t.update(dt);t.draw()});
+drawRatioBar();
+drawSyncArrows();
+// Vignette
+const vg=ctx.createRadialGradient(W/2,H/2,W*0.2,W/2,H/2,W*0.8);
+vg.addColorStop(0,'rgba(0,0,0,0)');
+vg.addColorStop(1,'rgba(0,0,0,0.5)');
+ctx.fillStyle=vg;
+ctx.fillRect(0,0,W,H);
+requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
+" sandbox="allow-scripts allow-same-origin" title="K8s Gitops"></iframe><div id=click-overlay role=button tabindex=0 aria-label="Click to begin the experience"><p class=overlay-quote>13 pods of infrastructure, 1 pod of value. That's the k8s tax. But hey, now you have GitOps.</p><p class=overlay-hint>Click to enter</p></div><script>const overlay=document.getElementById("click-overlay"),frame=document.getElementById("thought-frame");function dismiss(){overlay.style.opacity="0",setTimeout(()=>{overlay.style.display="none"},600),frame&&frame.contentWindow&&frame.contentWindow.postMessage("start-audio","*")}overlay.addEventListener("click",dismiss),overlay.addEventListener("keydown",e=>{(e.key==="Enter"||e.key===" ")&&dismiss()})</script></body></html>
