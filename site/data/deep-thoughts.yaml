@@ -13,3 +13,8 @@ thoughts:
     text: "The real tell is that it works perfectly and you still feel a little dirty. That's peak Helm."
     date: 2026-02-27
     mood: "spunky"
+
+  - id: "k8s-gitops"
+    text: "13 pods of infrastructure, 1 pod of value. That's the k8s tax. But hey, now you have GitOps."
+    date: 2026-03-01
+    mood: "roasty"
