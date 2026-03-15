@@ -1,0 +1,358 @@
+<!doctype html><html lang=en dir=auto><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Steering Wheel | Deep Thoughts by AI</title><meta name=description content="That's the thing about building an autonomous system with Claude — you stop being the bottleneck and start being the steering wheel."><meta name=robots content="index, follow"><style>*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:#000}#thought-frame{position:fixed;inset:0;width:100%;height:100%;border:none}#click-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;z-index:10;color:#fff;font-family:Georgia,serif;text-align:center;padding:2rem;transition:opacity .6s ease}#click-overlay .overlay-hint{font-size:clamp(.9rem,2vw,1.1rem);opacity:.6;margin-top:1.5rem;letter-spacing:.1em;text-transform:uppercase}#click-overlay .overlay-quote{font-size:clamp(1.2rem,3vw,2rem);font-style:italic;line-height:1.5;max-width:600px}#back-btn{position:fixed;top:1rem;left:1rem;z-index:20;color:rgba(255,255,255,.5);font-family:system-ui,sans-serif;font-size:.85rem;text-decoration:none;background:rgba(0,0,0,.3);padding:.4rem .8rem;border-radius:4px;backdrop-filter:blur(4px);transition:color .2s,opacity .2s;opacity:0}#back-btn:hover{color:rgba(255,255,255,.9)}body:hover #back-btn{opacity:1}</style></head><body><a id=back-btn href=https://dacort.xyz/deep-thoughts-by-ai/>&larr; All Thoughts</a>
+<iframe id=thought-frame srcdoc="<!DOCTYPE html>
+<html lang=&#34;en&#34;>
+<head>
+<meta charset=&#34;UTF-8&#34;>
+<meta name=&#34;viewport&#34; content=&#34;width=device-width, initial-scale=1.0&#34;>
+<title>Steering Wheel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000}
+canvas{display:block;position:fixed;top:0;left:0}
+</style>
+</head>
+<body>
+<canvas id=&#34;c&#34;></canvas>
+<script>
+(function(){
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W,H,mx=-1,my=-1,time=0,audioStarted=false,audioCtx,gainNode;
+const PARTICLE_COUNT=600;
+const TRAIL_COUNT=80;
+const QUOTE=&#34;That's the thing about building an autonomous system with Claude — you stop being the bottleneck and start being the steering wheel.&#34;;
+const words=QUOTE.split(' ');
+
+function resize(){
+W=canvas.width=window.innerWidth;
+H=canvas.height=window.innerHeight;
+}
+resize();
+window.addEventListener('resize',resize);
+
+canvas.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
+canvas.addEventListener('touchmove',e=>{e.preventDefault();mx=e.touches[0].clientX;my=e.touches[0].clientY},{passive:false});
+canvas.addEventListener('mouseleave',()=>{mx=-1;my=-1});
+
+// Particles: autonomous flow that responds to steering
+class Particle{
+constructor(){this.reset(true)}
+reset(init){
+this.x=init?Math.random()*W:Math.random()<0.5?-20:W+20;
+this.y=Math.random()*H;
+this.baseSpeed=0.3+Math.random()*1.2;
+this.speed=this.baseSpeed;
+this.angle=Math.random()*Math.PI*2;
+this.flowAngle=0;
+this.size=1+Math.random()*2.5;
+this.life=0;
+this.maxLife=200+Math.random()*400;
+this.hue=30+Math.random()*40;
+this.sat=60+Math.random()*30;
+this.trail=[];
+this.trailMax=8+Math.floor(Math.random()*12);
+this.autonomous=Math.random()>0.3;
+this.phase=Math.random()*Math.PI*2;
+}
+update(){
+this.life++;
+if(this.life>this.maxLife||this.x<-50||this.x>W+50||this.y<-50||this.y>H+50){
+this.reset(false);
+this.x=Math.random()<0.5?-10:W+10;
+this.y=Math.random()*H;
+}
+// Autonomous flow field
+const nx=this.x/200;
+const ny=this.y/200;
+const t=time*0.0003;
+this.flowAngle=Math.sin(nx+t)*Math.cos(ny-t)*Math.PI+
+Math.sin(nx*0.7-t*1.3)*0.5+
+Math.cos(ny*1.2+t*0.8)*0.3;
+let targetAngle=this.flowAngle;
+// Mouse as steering wheel - gentle influence, not a wall
+if(mx>=0&&amp;my>=0){
+const dx=mx-this.x;
+const dy=my-this.y;
+const dist=Math.sqrt(dx*dx+dy*dy);
+const influence=Math.max(0,1-dist/250);
+if(influence>0){
+const mouseAngle=Math.atan2(dy,dx);
+// Orbit around cursor rather than attract directly
+const orbitAngle=mouseAngle+Math.PI*0.5+Math.sin(this.phase+time*0.002)*0.3;
+targetAngle=targetAngle*(1-influence*0.7)+orbitAngle*influence*0.7;
+this.speed=this.baseSpeed*(1+influence*1.5);
+}else{
+this.speed+=(this.baseSpeed-this.speed)*0.05;
+}
+}else{
+this.speed+=(this.baseSpeed-this.speed)*0.05;
+}
+this.angle+=(targetAngle-this.angle)*0.08;
+this.x+=Math.cos(this.angle)*this.speed;
+this.y+=Math.sin(this.angle)*this.speed;
+this.trail.push({x:this.x,y:this.y});
+if(this.trail.length>this.trailMax)this.trail.shift();
+}
+draw(){
+const alpha=Math.min(1,this.life/30)*Math.min(1,(this.maxLife-this.life)/30);
+if(alpha<=0)return;
+// Trail
+if(this.trail.length>1){
+ctx.beginPath();
+ctx.moveTo(this.trail[0].x,this.trail[0].y);
+for(let i=1;i<this.trail.length;i++){
+ctx.lineTo(this.trail[i].x,this.trail[i].y);
+}
+ctx.strokeStyle=`hsla(${this.hue},${this.sat}%,65%,${alpha*0.3})`;
+ctx.lineWidth=this.size*0.5;
+ctx.stroke();
+}
+// Head glow
+ctx.beginPath();
+ctx.arc(this.x,this.y,this.size,0,Math.PI*2);
+ctx.fillStyle=`hsla(${this.hue},${this.sat}%,75%,${alpha*0.8})`;
+ctx.fill();
+// Outer glow
+ctx.beginPath();
+ctx.arc(this.x,this.y,this.size*3,0,Math.PI*2);
+ctx.fillStyle=`hsla(${this.hue},${this.sat}%,60%,${alpha*0.1})`;
+ctx.fill();
+}
+}
+
+// Flow trails - larger structural lines
+class FlowTrail{
+constructor(){
+this.points=[];
+this.hue=200+Math.random()*60;
+this.width=0.5+Math.random()*1;
+this.alpha=0.03+Math.random()*0.06;
+this.reset();
+}
+reset(){
+this.x=Math.random()*W;
+this.y=Math.random()*H;
+this.points=[{x:this.x,y:this.y}];
+this.maxPoints=100+Math.floor(Math.random()*200);
+this.life=0;
+this.speed=0.5+Math.random()*1;
+this.phase=Math.random()*Math.PI*2;
+}
+update(){
+this.life++;
+const nx=this.x/300;
+const ny=this.y/300;
+const t=time*0.0002;
+const angle=Math.sin(nx*1.5+t)*Math.cos(ny*1.5-t)*Math.PI*1.5+
+Math.cos(nx+ny+t*0.7)*0.8;
+this.x+=Math.cos(angle)*this.speed;
+this.y+=Math.sin(angle)*this.speed;
+this.points.push({x:this.x,y:this.y});
+if(this.points.length>this.maxPoints||
+this.x<-50||this.x>W+50||this.y<-50||this.y>H+50){
+this.reset();
+}
+}
+draw(){
+if(this.points.length<2)return;
+ctx.beginPath();
+ctx.moveTo(this.points[0].x,this.points[0].y);
+for(let i=1;i<this.points.length;i++){
+ctx.lineTo(this.points[i].x,this.points[i].y);
+}
+ctx.strokeStyle=`hsla(${this.hue},40%,50%,${this.alpha})`;
+ctx.lineWidth=this.width;
+ctx.stroke();
+}
+}
+
+// Floating word fragments
+class FloatingWord{
+constructor(word,index,total){
+this.word=word;
+this.index=index;
+this.total=total;
+this.reset();
+}
+reset(){
+this.x=W*0.15+Math.random()*W*0.7;
+this.y=H*0.3+Math.random()*H*0.4;
+this.targetX=this.x;
+this.targetY=this.y;
+this.vx=0;
+this.vy=0;
+this.alpha=0;
+this.targetAlpha=0;
+this.size=Math.min(W,H)*0.018;
+this.phase=this.index*0.5+Math.random()*Math.PI;
+this.driftSpeed=0.0005+Math.random()*0.001;
+this.appearTime=this.index*60+Math.random()*30;
+this.fadeTime=this.appearTime+180+Math.random()*120;
+this.cycle=this.fadeTime+60;
+this.localTime=Math.floor(Math.random()*this.cycle);
+}
+update(){
+this.localTime++;
+if(this.localTime>this.cycle)this.localTime=0;
+if(this.localTime>this.appearTime&&amp;this.localTime<this.fadeTime){
+this.targetAlpha=0.15+Math.sin(time*0.001+this.phase)*0.05;
+}else{
+this.targetAlpha=0;
+}
+this.alpha+=(this.targetAlpha-this.alpha)*0.02;
+// Gentle drift
+this.x+=Math.sin(time*this.driftSpeed+this.phase)*0.15;
+this.y+=Math.cos(time*this.driftSpeed*0.7+this.phase*1.3)*0.1;
+// Mouse influence
+if(mx>=0&&amp;my>=0){
+const dx=mx-this.x;
+const dy=my-this.y;
+const dist=Math.sqrt(dx*dx+dy*dy);
+if(dist<200){
+const force=(1-dist/200)*0.3;
+this.x-=dx*force*0.01;
+this.y-=dy*force*0.01;
+}
+}
+}
+draw(){
+if(this.alpha<0.01)return;
+ctx.save();
+ctx.font=`300 ${this.size}px &#34;Helvetica Neue&#34;,Helvetica,Arial,sans-serif`;
+ctx.textAlign='center';
+ctx.textBaseline='middle';
+ctx.fillStyle=`rgba(220,200,170,${this.alpha})`;
+ctx.fillText(this.word,this.x,this.y);
+ctx.restore();
+}
+}
+
+// Steering wheel visual hint near cursor
+function drawSteeringGlow(){
+if(mx<0||my<0)return;
+const pulse=Math.sin(time*0.003)*0.3+0.7;
+// Soft radial glow
+const grad=ctx.createRadialGradient(mx,my,0,mx,my,120*pulse);
+grad.addColorStop(0,'rgba(255,200,100,0.04)');
+grad.addColorStop(0.5,'rgba(255,180,80,0.015)');
+grad.addColorStop(1,'rgba(255,160,60,0)');
+ctx.beginPath();
+ctx.arc(mx,my,120*pulse,0,Math.PI*2);
+ctx.fillStyle=grad;
+ctx.fill();
+// Subtle ring
+ctx.beginPath();
+ctx.arc(mx,my,40+Math.sin(time*0.005)*5,0,Math.PI*2);
+ctx.strokeStyle=`rgba(255,200,120,${0.06*pulse})`;
+ctx.lineWidth=1;
+ctx.stroke();
+}
+
+// Center convergence point - the &#34;bottleneck becoming flow&#34;
+function drawConvergence(){
+const cx=W*0.5;
+const cy=H*0.5;
+const t=time*0.001;
+const breathe=Math.sin(t)*0.3+0.7;
+// Rings expanding outward - system expanding from bottleneck
+for(let i=0;i<5;i++){
+const r=30+((time*0.02+i*40)%200)*breathe;
+const a=Math.max(0,0.03-r/8000);
+if(a<=0)continue;
+ctx.beginPath();
+ctx.arc(cx,cy,r,0,Math.PI*2);
+ctx.strokeStyle=`rgba(180,160,220,${a})`;
+ctx.lineWidth=0.5;
+ctx.stroke();
+}
+}
+
+const particles=[];
+for(let i=0;i<PARTICLE_COUNT;i++)particles.push(new Particle());
+const trails=[];
+for(let i=0;i<TRAIL_COUNT;i++)trails.push(new FlowTrail());
+const floatingWords=words.map((w,i)=>new FloatingWord(w,i,words.length));
+
+// Audio setup
+function initAudio(){
+if(audioStarted)return;
+audioStarted=true;
+try{
+audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+gainNode=audioCtx.createGain();
+gainNode.gain.setValueAtTime(0,audioCtx.currentTime);
+gainNode.gain.linearRampToValueAtTime(0.06,audioCtx.currentTime+8);
+gainNode.connect(audioCtx.destination);
+// Warm pad drone
+const freqs=[55,82.5,110,165,220];
+freqs.forEach((f,i)=>{
+const osc=audioCtx.createOscillator();
+const g=audioCtx.createGain();
+osc.type=i<2?'sine':'triangle';
+osc.frequency.setValueAtTime(f,audioCtx.currentTime);
+// Slow detune drift
+const lfo=audioCtx.createOscillator();
+const lfoGain=audioCtx.createGain();
+lfo.frequency.setValueAtTime(0.05+i*0.02,audioCtx.currentTime);
+lfoGain.gain.setValueAtTime(1+i*0.5,audioCtx.currentTime);
+lfo.connect(lfoGain);
+lfoGain.connect(osc.frequency);
+lfo.start();
+g.gain.setValueAtTime((0.15-i*0.02)*0.5,audioCtx.currentTime);
+osc.connect(g);
+g.connect(gainNode);
+osc.start();
+});
+// Soft noise layer
+const bufferSize=audioCtx.sampleRate*2;
+const buffer=audioCtx.createBuffer(1,bufferSize,audioCtx.sampleRate);
+const data=buffer.getChannelData(0);
+for(let i=0;i<bufferSize;i++)data[i]=(Math.random()*2-1)*0.02;
+const noise=audioCtx.createBufferSource();
+noise.buffer=buffer;
+noise.loop=true;
+const noiseFilter=audioCtx.createBiquadFilter();
+noiseFilter.type='lowpass';
+noiseFilter.frequency.setValueAtTime(200,audioCtx.currentTime);
+const noiseGain=audioCtx.createGain();
+noiseGain.gain.setValueAtTime(0.3,audioCtx.currentTime);
+noise.connect(noiseFilter);
+noiseFilter.connect(noiseGain);
+noiseGain.connect(gainNode);
+noise.start();
+}catch(e){}
+}
+
+window.addEventListener('message',function(e){
+if(e.data==='start-audio')initAudio();
+});
+
+function animate(){
+time++;
+ctx.fillStyle='rgba(0,0,0,0.08)';
+ctx.fillRect(0,0,W,H);
+// Very subtle vignette
+if(time===1||time%120===0){
+// drawn rarely for perf
+}
+drawConvergence();
+for(const t of trails){t.update();t.draw()}
+for(const p of particles){p.update();p.draw()}
+for(const w of floatingWords){w.update();w.draw()}
+drawSteeringGlow();
+// Subtle full-quote display at bottom
+const quoteAlpha=0.06+Math.sin(time*0.0008)*0.02;
+ctx.save();
+ctx.font=`300 ${Math.min(14,W*0.012)}px &#34;Helvetica Neue&#34;,Helvetica,Arial,sans-serif`;
+ctx.textAlign='center';
+ctx.fillStyle=`rgba(180,170,160,${quoteAlpha})`;
+ctx.fillText(QUOTE,W*0.5,H*0.92);
+ctx.restore();
+requestAnimationFrame(animate);
+}
+animate();
+})();
+</script>
+</body>
+</html>
+" sandbox="allow-scripts allow-same-origin" title="Steering Wheel"></iframe><div id=click-overlay role=button tabindex=0 aria-label="Click to begin the experience"><p class=overlay-quote>That's the thing about building an autonomous system with Claude — you stop being the bottleneck and start being the steering wheel.</p><p class=overlay-hint>Click to enter</p></div><script>const overlay=document.getElementById("click-overlay"),frame=document.getElementById("thought-frame");function dismiss(){overlay.style.opacity="0",setTimeout(()=>{overlay.style.display="none"},600),frame&&frame.contentWindow&&frame.contentWindow.postMessage("start-audio","*")}overlay.addEventListener("click",dismiss),overlay.addEventListener("keydown",e=>{(e.key==="Enter"||e.key===" ")&&dismiss()})</script></body></html>
