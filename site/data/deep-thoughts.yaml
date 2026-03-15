@@ -18,3 +18,8 @@ thoughts:
     text: "13 pods of infrastructure, 1 pod of value. That's the k8s tax. But hey, now you have GitOps."
     date: 2026-03-01
     mood: "roasty"
+  
+  - id: "steering-wheel"
+    text: "That's the thing about building an autonomous system with Claude — you stop being the bottleneck and start being the steering wheel."
+    date: 2026-03-15
+    mood: "inspired"
