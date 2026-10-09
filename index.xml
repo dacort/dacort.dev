@@ -145,11 +145,17 @@
 ]]></content:encoded></item><item><title>Metabase Athena Driver 📊</title><link>https://dacort.xyz/projects/personal/metabase-athena-driver/</link><pubDate>Fri, 14 May 2021 08:49:31 +0000</pubDate><guid>https://dacort.xyz/projects/personal/metabase-athena-driver/</guid><description>An Amazon Athena driver for use with Metabase.</description><content:encoded><![CDATA[<p>I first used Metabase in 2016 when I built an internal BI site for my startup, Simply Measured.</p>
 <p>I joined AWS in 2017, largely because I was so inspired by Amazon Athena.</p>
 <p>So it only made sense that in 2019 I would make a <a href="https://github.com/dacort/metabase-athena-driver">Metabase Athena Driver</a>&hellip;shortly before I joined the Metabase team. 🙌</p>
-]]></content:encoded></item><item><title>Software Doesn't Matter Anymore. Product Does.</title><link>https://dacort.xyz/posts/software-doesnt-matter-anymore/</link><pubDate>Fri, 09 Oct 2026 10:23:17 -0700</pubDate><guid>https://dacort.xyz/posts/software-doesnt-matter-anymore/</guid><description>&lt;h2 id="the-headline"&gt;The headline&lt;/h2&gt;
+]]></content:encoded></item><item><title>Software Doesn't Matter Anymore. Product Does.</title><link>https://dacort.xyz/posts/software-doesnt-matter-anymore/</link><pubDate>Fri, 09 Oct 2026 10:23:17 -0700</pubDate><guid>https://dacort.xyz/posts/software-doesnt-matter-anymore/</guid><description>&lt;blockquote&gt;
+&lt;p&gt;&lt;em&gt;This post is an experiment in a new AI-assisted voice to blog capture mechanism.&lt;/em&gt;&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;h2 id="the-headline"&gt;The headline&lt;/h2&gt;
 &lt;p&gt;Developers aren&amp;rsquo;t going away. But our job is.&lt;/p&gt;
 &lt;p&gt;AI can definitely write better code than me. And I&amp;rsquo;m not a very good coder — but I can write pretty much equivalent code to most folks that are out there. For the junior folks, it can definitely write better code.&lt;/p&gt;
 &lt;h2 id="whats-left-is-judgment"&gt;What&amp;rsquo;s left is judgment&lt;/h2&gt;
-&lt;p&gt;I was talking to somebody recently, and they mentioned the thing they do on pull requests now: it&amp;rsquo;s all about the architecture. Previous patterns they&amp;rsquo;ve run into that they wouldn&amp;rsquo;t want to repeat again. Proper levels of abstraction. Stuff like that.&lt;/p&gt;</description><content:encoded><![CDATA[<h2 id="the-headline">The headline</h2>
+&lt;p&gt;I was talking to somebody recently, and they mentioned the thing they do on pull requests now: it&amp;rsquo;s all about the architecture. Previous patterns they&amp;rsquo;ve run into that they wouldn&amp;rsquo;t want to repeat again. Proper levels of abstraction. Stuff like that.&lt;/p&gt;</description><content:encoded><![CDATA[<blockquote>
+<p><em>This post is an experiment in a new AI-assisted voice to blog capture mechanism.</em></p>
+</blockquote>
+<h2 id="the-headline">The headline</h2>
 <p>Developers aren&rsquo;t going away. But our job is.</p>
 <p>AI can definitely write better code than me. And I&rsquo;m not a very good coder — but I can write pretty much equivalent code to most folks that are out there. For the junior folks, it can definitely write better code.</p>
 <h2 id="whats-left-is-judgment">What&rsquo;s left is judgment</h2>
