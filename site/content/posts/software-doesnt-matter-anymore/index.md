@@ -5,7 +5,15 @@ draft: false
 
 tags: ["ai", "careers"]
 showToc: false
+
+cover:
+  image: "cover.png"
+  alt: "Illustration of a smiling person holding up a blueprint of an app, with a dashed arrow handing it off to a friendly robot typing on a laptop, surrounded by curly braces and code symbols. Headline reads: Software doesn't matter anymore. Product does."
+  relative: true
+  hidden: true
 ---
+
+> _This post is an experiment in a new AI-assisted voice to blog capture mechanism._
 
 ## The headline
 
