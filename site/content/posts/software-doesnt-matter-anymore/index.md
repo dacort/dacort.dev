@@ -56,3 +56,9 @@ I say "product" deliberately, because I don't think software matters anymore.
 I'm not worried my job is going away. I just don't know what it looks like in five years.
 
 Developers aren't going away. But our job is.
+
+---
+
+**Postscript (Oct 9, 2026):** This post was edited after publishing. The first version stayed very close to the voice transcript, and it read that way, so I had it tightened up: about 910 words down to 581, and 8 sections down to 4. Here are three representative edits. The [original version](https://github.com/dacort/dacort.dev/blob/d2e29ed/site/content/posts/software-doesnt-matter-anymore/index.md) is still on GitHub.
+
+![Before and after comparison of three edits from this post: cutting spoken filler, saying why a sentence is there, and folding small sections into the argument. Word count went from 910 to 581 and sections from 8 to 4.](tightening-diff.png)
