@@ -66,3 +66,9 @@ So I think it's still two root causes:
 2. Verification: knowing the change is right.
 
 And that second one is really key. I struggle with this a lot with infrastructure or data ETL changes. Yes, you can test with mock data or do a dry run. But often, at a certain scale, until you're in production, it's hard to know where some of these things will break. Unless you have a really good pre-existing test harness, right?
+
+---
+
+**Postscript:** The first version of this post stayed very close to the voice transcript, so I had it tightened up, only cutting and reordering my words: 814 words down to 745. Here are three representative edits. The [original version](https://github.com/dacort/dacort.dev/blob/ea38924/site/content/posts/greenfield-vs-brownfield/index.md) is still on GitHub.
+
+![Before and after comparison of three edits from this post: cutting a repeated phrase, trimming spoken warm-up words, and reordering a run-on sentence. Word count went from 814 to 745, with all five sections and every idea kept.](tightening-diff.png)
