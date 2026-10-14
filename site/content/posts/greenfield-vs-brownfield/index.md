@@ -8,7 +8,7 @@ showToc: false
 
 cover:
   image: "cover.png"
-  alt: "TODO — written once the cover image exists"
+  alt: "Split cartoon illustration under the headline \"Greenfield vs. Brownfield.\" On the left, on green grass under a bright sun, a smiling person cheers at a laptop next to a \"25m\" timer badge, with a dashed arrow up to a finished desktop app and phone app marked with a green checkmark. On the right, a frowning person stands ankle-deep in brown mud staring at a phone, surrounded by five pull request cards (one awaiting review, four blocked) tangled together by lines, with an hourglass nearby."
   relative: true
   hidden: true
 ---
